@@ -2,6 +2,24 @@ export interface Club {
   club_id: string; club_name: string; flag_emoji?: string
   status?: 'active' | 'launching' | 'upcoming'; country?: string
   description?: string; created_at?: string
+  lat?:         number | null
+  lng?:         number | null
+  coords?:      string | null   
+  geo_fence?:   number | null
+  alert_start?: number | null
+  alert_reach?: number | null
+  about_html?:    string | null
+  mission_html?:  string | null
+  vision_html?:   string | null
+  contact_email?: string | null
+  contact_phone?: string | null
+}
+export interface ClubImage {
+  image_id:   string
+  club_id:    string
+  image_url:  string
+  caption?:   string | null
+  sort_order?: number | null
 }
 export interface ProductCategory {
   category_id: string; category_name: string; slug?: string
@@ -15,7 +33,7 @@ export interface ProductCategoryImage {
 }
 export interface Product {
   product_id: string; product_name: string; description?: string
-  price: number; uom?: string; service_type?: 'E' | 'S' | 'B'
+  price: number; uom?: string; service_type?: 'E' | 'B' | 'S' | 'I'
   category_id: string; club_id: string; created_at?: string
 }
 export interface ProductImage {
@@ -31,6 +49,12 @@ export interface Shop {
   shop_type?: 'physical' | 'onwheel' | 'online'
   contact?: string; address?: string; description?: string
   is_active?: boolean; created_at?: string
+  shop_emoji?:   string | null
+  shop_tagline?: string | null
+  lat?:         number | null
+  lon?:         number | null
+  lng?:         number | null
+  coords?:       string | null
 }
 export interface ShopImage {
   image_id: string; shop_id: string; image_url: string

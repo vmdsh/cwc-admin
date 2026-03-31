@@ -17,9 +17,10 @@ const EMPTY_IMG: Partial<ProductImage> = {
 type Tab = 'details' | 'images'
 
 const SVC_TYPES: { value: string; label: string }[] = [
-  { value: 'E', label: 'E — Event' },
+  { value: 'E', label: 'E — Enrollment' },
+  { value: 'B', label: 'B — Booking' },
   { value: 'S', label: 'S — Service' },
-  { value: 'B', label: 'B — Both' },
+  { value: 'I', label: 'I — Item' },
 ]
 
 export function Products() {
@@ -252,8 +253,8 @@ export function Products() {
                     options={catOpts('', form.club_id)} placeholder="— Select Category —" />
                 </div>
                 <div className="form-group">
-                  <label>Service Type</label>
-                  <select value={form.service_type || 'E'} onChange={e => setForm(f => ({ ...f, service_type: e.target.value as 'E' | 'S' | 'B' }))}>
+                  <label>Product Type</label>
+                  <select value={form.service_type || 'E'} onChange={e => setForm(f => ({ ...f, service_type: e.target.value as 'E' | 'B' | 'S' | 'I' }))}>
                     {SVC_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
