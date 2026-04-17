@@ -54,9 +54,7 @@ export function Products() {
   const [imgMsg,     setImgMsg]     = useState('')
   const [delImg,     setDelImg]     = useState<ProductImage | null>(null)
 
-  // ── AI Generation State ──
-  const [isAiProcessing, setIsAiProcessing] = useState(false)
-
+  // ── Load products ──
   const load = async () => {
     setLoading(true)
     let q = supabase.from('products').select('*')
@@ -71,8 +69,10 @@ export function Products() {
 
   useEffect(() => { load() }, [filterClub, filterCat, filterSvc])
 
+  // Reset category filter when club changes
   const handleFilterClub = (v: string) => { setFilterClub(v); setFilterCat('') }
 
+  // ── Load images ──
   const loadImages = async (productId: string) => {
     setImgLoading(true)
     const { data } = await supabase
@@ -82,18 +82,21 @@ export function Products() {
     setImgLoading(false)
   }
 
+  // ── Open Add ──
   const openAdd = () => {
     setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '' })
     setEditing(false); setActiveTab('details')
     setOpen(true); setErr(''); setMsg('')
   }
 
+  // ── Open Edit ──
   const openEdit = (r: Product) => {
     setForm(r); setEditing(true); setActiveTab('details')
     setOpen(true); setErr(''); setMsg('')
     loadImages(r.product_id)
   }
 
+  // ── Save product ──
   const save = async () => {
     if (!form.product_name || !form.club_id || !form.category_id) {
       setErr('Name, Club and Category required'); return
@@ -112,6 +115,7 @@ export function Products() {
     await loadCaches(); setOpen(false); load()
   }
 
+  // ── Delete product ──
   const doDeleteProd = async () => {
     if (!delProd) return
     await supabase.from('products').delete().eq('product_id', delProd.product_id)
@@ -145,74 +149,11 @@ export function Products() {
     setDelImg(null); loadImages(form.product_id!)
   }
 
-  // ── AI Catalog Generation ──
-  const generateAiImages = async () => {
-    if (!imgForm.image_url) { setImgErr('Please upload/select a source image first.'); return }
-    setIsAiProcessing(true); setImgMsg('AI is creating 4 professional images...')
-    
-    const prompts = [
-      `Professional studio shot of ${form.product_name} on a clean light grey background, high-end catalog style`,
-      `Product photography of ${form.product_name} on a white marble surface, bright and airy`,
-      `Artisanal presentation of ${form.product_name} on a light textured wooden table with soft shadows`,
-      `${form.product_name} styled on a minimalist white linen cloth, luxury marketplace aesthetic`
-    ];
-
-    try {
-      // Get the source image as a blob
-      const imgFetch = await fetch(imgForm.image_url);
-      const sourceBlob = await imgFetch.blob();
-
-      for (let i = 0; i < prompts.length; i++) {
-        const formData = new FormData();
-        formData.append('image_file', sourceBlob);
-        formData.append('background.prompt', prompts[i]);
-        formData.append('padding', '0.15'); // 1600x1600 with 1000px zoom look
-        formData.append('output_size', 'large');
-        formData.append('shadow.mode', 'ai.soft');
-
-        const res = await fetch('https://sdk.photoroom.com/v1/editing', {
-          method: 'POST',
-          headers: { 'x-api-key': import.meta.env.VITE_PHOTOROOM_API_KEY },
-          body: formData
-        });
-
-        if (!res.ok) throw new Error(`Photoroom error: ${res.statusText}`);
-        const resultBlob = await res.blob();
-
-        // Upload to Supabase Storage
-        const path = `products/ai_${form.product_id}_${i}_${Date.now()}.jpg`;
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
-          .upload(path, resultBlob, { contentType: 'image/jpeg' });
-
-        if (uploadErr) throw uploadErr;
-
-        // Get Public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
-          .getPublicUrl(path);
-
-        // Save to DB
-        await supabase.from('product_images').insert({
-          product_id: form.product_id,
-          image_url: publicUrl,
-          caption: `AI Generated Scene ${i + 1}`,
-          sort_order: i + 1
-        });
-      }
-      setImgMsg('✅ 4 images generated and saved!');
-      loadImages(form.product_id!);
-    } catch (e: any) {
-      setImgErr(`AI Failed: ${e.message}`);
-    } finally {
-      setIsAiProcessing(false);
-    }
-  }
-
   const clubOptions = clubOpts()
   const catOptions  = catOpts('', filterClub || form.club_id || '')
-  const hasSetDefault = useRef(false)
 
+  // Set default club filter for superadmin (first club)
+  const hasSetDefault = useRef(false)
   useEffect(() => {
     if (isSuperAdmin && !filterClub && clubOptions.length > 0 && !hasSetDefault.current) {
       setFilterClub(clubOptions[0].value)
@@ -234,6 +175,7 @@ export function Products() {
 
   return (
     <div>
+      {/* ── Header ── */}
       <div className="section-header">
         <div>
           <div className="section-title">Products</div>
@@ -242,7 +184,9 @@ export function Products() {
         <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Product</button>
       </div>
 
+      {/* ── Filter Bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {/* Club — superadmin only */}
         {isSuperAdmin && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
             <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Club</span>
@@ -253,6 +197,8 @@ export function Products() {
             </select>
           </div>
         )}
+
+        {/* Category */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Category</span>
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
@@ -261,6 +207,8 @@ export function Products() {
             {catOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
+
+        {/* Service Type */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Type</span>
           <select value={filterSvc} onChange={e => setFilterSvc(e.target.value)}
@@ -269,6 +217,8 @@ export function Products() {
             {SVC_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </div>
+
+        {/* Clear filters */}
         {(filterCat || filterSvc || (isSuperAdmin && filterClub)) && (
           <button className="btn btn-ghost btn-sm"
             onClick={() => { setFilterCat(''); setFilterSvc(''); if (isSuperAdmin) setFilterClub('') }}>
@@ -277,8 +227,10 @@ export function Products() {
         )}
       </div>
 
+      {/* ── Form Panel ── */}
       {open && (
         <div className="form-panel open">
+          {/* Tabs — edit mode only */}
           {editing && (
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
               <button style={tabStyle('details')} onClick={() => setActiveTab('details')}>📋 Details</button>
@@ -287,6 +239,7 @@ export function Products() {
           )}
           {!editing && <div className="form-panel-title">✏️ Add Product</div>}
 
+          {/* ── DETAILS TAB ── */}
           {(activeTab === 'details' || !editing) && (
             <>
               <div className="form-row">
@@ -338,26 +291,17 @@ export function Products() {
             </>
           )}
 
+          {/* ── IMAGES TAB ── */}
           {editing && activeTab === 'images' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <span style={{ fontSize: '.78rem', color: 'var(--text3)' }}>
                   Images for <strong style={{ color: 'var(--text)' }}>{form.product_name}</strong>
                 </span>
-                <div style={{ display: 'flex', gap: '.5rem' }}>
-                   {/* ADD AI IMAGE BUTTON */}
-                  <button 
-                    className="btn btn-sm" 
-                    style={{ background: 'var(--accent)', color: 'white' }}
-                    onClick={generateAiImages}
-                    disabled={isAiProcessing || !images.length && !imgForm.image_url}
-                  >
-                    {isAiProcessing ? '✨ Processing...' : '✨ ADD AI Images'}
-                  </button>
-                  <button className="btn btn-primary btn-sm" onClick={openImgAdd}>+ Add Image</button>
-                </div>
+                <button className="btn btn-primary btn-sm" onClick={openImgAdd}>+ Add Image</button>
               </div>
 
+              {/* Image form */}
               {imgOpen && (
                 <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', padding: '1rem', marginBottom: '1rem' }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '.75rem' }}>
@@ -386,6 +330,7 @@ export function Products() {
                 </div>
               )}
 
+              {/* Image grid */}
               {imgLoading
                 ? <div className="empty"><span className="spinner" />Loading images…</div>
                 : images.length === 0
@@ -416,6 +361,7 @@ export function Products() {
         </div>
       )}
 
+      {/* ── Table ── */}
       {loading
         ? <div className="empty"><span className="spinner" />Loading…</div>
         : (

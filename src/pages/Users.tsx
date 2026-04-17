@@ -7,12 +7,36 @@ import type { User } from '../types/database'
 const E:Partial<User>={ name:'', email:'', password:'', role:'member', club_id:'' }
 export function Users() {
   const { adminUser, isSuperAdmin, clubOpts, loadCaches, clubName } = useAdminStore()
+  
+  // Club filter
+  const clubOptions = clubOpts()
+  const [filterClub, setFilterClub] = useState<string>('') // Empty string = All clubs
+  
   const [rows,setRows]=useState<User[]>([]); const [loading,setLoading]=useState(true)
   const [form,setForm]=useState<Partial<User>>(E); const [editing,setEditing]=useState(false)
   const [open,setOpen]=useState(false); const [err,setErr]=useState(''); const [msg,setMsg]=useState('')
   const [del,setDel]=useState<User|null>(null)
-  const load=async()=>{ setLoading(true); let q=supabase.from('users').select('*'); if(!isSuperAdmin&&adminUser?.club_id) q=q.eq('club_id',adminUser.club_id); const{data}=await q; setRows(data||[]); setLoading(false) }
-  useEffect(()=>{ load() },[])
+  
+  const load=async()=>{ 
+    setLoading(true); 
+    let q=supabase.from('users').select('*'); 
+    
+    // For non-superadmins, always filter by their club
+    if(!isSuperAdmin && adminUser?.club_id) {
+      q = q.eq('club_id', adminUser.club_id)
+    } 
+    // For superadmins, filter by selected club if any
+    else if (isSuperAdmin && filterClub) {
+      q = q.eq('club_id', filterClub)
+    }
+    
+    const{data}=await q; 
+    setRows(data||[]); 
+    setLoading(false) 
+  }
+  
+  useEffect(()=>{ load() },[filterClub, adminUser?.club_id, isSuperAdmin])
+  
   const save=async()=>{
     if(!form.name||!form.email){ setErr('Name and Email required'); return }
     setMsg('Saving…'); setErr('')
@@ -21,13 +45,32 @@ export function Users() {
     if(error){ setErr(error.message); setMsg(''); return }
     await loadCaches(); setOpen(false); load()
   }
+  
   const doDelete=async()=>{ if(!del) return; await supabase.from('users').delete().eq('user_id',del.user_id); setDel(null); await loadCaches(); load() }
+  
   return (
     <div>
       <div className="section-header">
         <div><div className="section-title">Users</div><div className="section-sub">{rows.length} users</div></div>
         {isSuperAdmin&&<button className="btn btn-primary btn-sm" onClick={()=>{ setForm(E); setEditing(false); setOpen(true); setErr(''); setMsg('') }}>+ Add User</button>}
       </div>
+      
+      {/* Club filter - only show for superadmins */}
+      {isSuperAdmin && (
+        <div className="filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ minWidth: '200px' }}>
+            <label>Club</label>
+            <Select 
+              value={filterClub} 
+              onChange={setFilterClub} 
+              options={[{ value: '', label: '— All Clubs —' }, ...clubOptions]} 
+              placeholder="— Select Club —"
+            />
+          </div>
+          <div style={{ flex: 1 }}></div>
+        </div>
+      )}
+      
       {open&&<div className="form-panel open">
         <div className="form-panel-title">✏️ {editing?'Edit':'Add'} User</div>
         <div className="form-row">

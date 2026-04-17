@@ -6,13 +6,58 @@ import { Select } from '../components/Select'
 import type { ShopProduct } from '../types/database'
 const E:Partial<ShopProduct>={ shop_id:'', product_id:'', price_override:null, is_available:true }
 export function ShopProducts() {
-  const { shopOpts, prodOpts, shopName, prodName } = useAdminStore()
+  const { adminUser, isSuperAdmin, clubOpts, shopOpts, prodOpts, shopName, prodName, shops } = useAdminStore()
+  
+  // Club filter
+  const clubOptions = clubOpts()
+  const defaultClub = isSuperAdmin
+    ? (clubOptions.length > 0 ? clubOptions[0].value : '')
+    : (adminUser?.club_id ?? '')
+  const [filterClub, setFilterClub] = useState<string>(defaultClub)
+  
+  // Shop filter (filtered by selected club)
+  const [filterShop, setFilterShop] = useState<string>('')
+  
   const [rows,setRows]=useState<ShopProduct[]>([]); const [loading,setLoading]=useState(true)
   const [form,setForm]=useState<Partial<ShopProduct>>(E)
   const [open,setOpen]=useState(false); const [err,setErr]=useState(''); const [msg,setMsg]=useState('')
   const [del,setDel]=useState<ShopProduct|null>(null)
-  const load=async()=>{ setLoading(true); const{data}=await supabase.from('shop_products').select('*'); setRows(data||[]); setLoading(false) }
-  useEffect(()=>{ load() },[])
+  
+  // Get shops filtered by selected club
+  const filteredShops = filterClub
+    ? shops.filter(sh => sh.club_id === filterClub)
+    : shops
+  
+  const shopOptions = filteredShops.map(sh => ({ value: sh.shop_id, label: sh.shop_name }))
+  
+  const load=async()=>{ 
+    setLoading(true); 
+    let q = supabase.from('shop_products').select('*')
+    
+    // If shop filter is selected, filter by shop
+    if (filterShop) {
+      q = q.eq('shop_id', filterShop)
+    } 
+    // Otherwise if club filter is selected, filter by shops in that club
+    else if (filterClub) {
+      const shopIds = filteredShops.map(sh => sh.shop_id)
+      if (shopIds.length > 0) {
+        q = q.in('shop_id', shopIds)
+      } else {
+        // No shops in this club, return empty
+        setRows([])
+        setLoading(false)
+        return
+      }
+    }
+    
+    const{data}=await q; 
+    setRows(data||[]); 
+    setLoading(false) 
+  }
+  
+  useEffect(()=>{ load() },[filterClub, filterShop])
+  
   const save=async()=>{
     if(!form.shop_id||!form.product_id){ setErr('Shop and Product required'); return }
     setMsg('Saving…'); setErr('')
@@ -20,13 +65,44 @@ export function ShopProducts() {
     if(error){ setErr(error.message); setMsg(''); return }
     setOpen(false); load()
   }
+  
   const doDelete=async()=>{ if(!del) return; await supabase.from('shop_products').delete().eq('id',del.id); setDel(null); load() }
+  
   return (
     <div>
       <div className="section-header">
         <div><div className="section-title">Shop Products</div><div className="section-sub">Link products to shops · {rows.length} links</div></div>
         <button className="btn btn-primary btn-sm" onClick={()=>{ setForm(E); setOpen(true); setErr(''); setMsg('') }}>+ Link Product</button>
       </div>
+      
+      {/* Filter controls */}
+      <div className="filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+        <div className="form-group" style={{ minWidth: '200px' }}>
+          <label>Club</label>
+          <Select 
+            value={filterClub} 
+            onChange={v => { 
+              setFilterClub(v)
+              setFilterShop('') // Reset shop filter when club changes
+            }} 
+            options={clubOptions} 
+            placeholder="— All Clubs —"
+            disabled={!isSuperAdmin && !!adminUser?.club_id}
+          />
+        </div>
+        <div className="form-group" style={{ minWidth: '200px' }}>
+          <label>Shop</label>
+          <Select 
+            value={filterShop} 
+            onChange={setFilterShop} 
+            options={[{ value: '', label: '— All Shops —' }, ...shopOptions]} 
+            placeholder="— Select Shop —"
+            disabled={!filterClub}
+          />
+        </div>
+        <div style={{ flex: 1 }}></div>
+      </div>
+      
       {open&&<div className="form-panel open">
         <div className="form-panel-title">✏️ Link Product to Shop</div>
         <div className="form-row">

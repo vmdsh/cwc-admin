@@ -83,9 +83,11 @@ export function Shops() {
   const { adminUser, isSuperAdmin, clubOpts, loadCaches, clubName } = useAdminStore()
 
   // ── Club filter ──
-  const [filterClub, setFilterClub] = useState<string>(
-    isSuperAdmin ? '' : (adminUser?.club_id ?? '')
-  )
+  const clubOptions = clubOpts()
+  const defaultClub = isSuperAdmin
+    ? (clubOptions.length > 0 ? clubOptions[0].value : '')
+    : (adminUser?.club_id ?? '')
+  const [filterClub, setFilterClub] = useState<string>(defaultClub)
 
   // ── List ──
   const [rows,    setRows]    = useState<Shop[]>([])
@@ -214,8 +216,6 @@ export function Shops() {
     await supabase.from('shop_images').delete().eq('image_id', delImg.image_id)
     setDelImg(null); loadImages(form.shop_id!)
   }
-
-  const clubOptions = clubOpts()
 
   const tabStyle = (t: Tab) => ({
     padding: '.45rem 1.1rem', fontSize: '.78rem', fontWeight: 700,

@@ -18,11 +18,13 @@ type Tab = 'details' | 'images'
 
 export function Categories() {
   const { adminUser, isSuperAdmin, clubOpts, clubName, catName, loadCaches } = useAdminStore()
+  const opts = clubOpts()
+  const defaultClub = isSuperAdmin
+    ? (opts.length > 0 ? opts[0].value : '')
+    : (adminUser?.club_id ?? '')
 
   // ── Club filter (superadmin only) ──
-  const [filterClub, setFilterClub] = useState<string>(
-    isSuperAdmin ? '' : (adminUser?.club_id ?? '')
-  )
+  const [filterClub, setFilterClub] = useState<string>(defaultClub)
 
   // ── Category list ──
   const [rows, setRows]       = useState<ProductCategory[]>([])
@@ -168,7 +170,6 @@ export function Categories() {
     loadImages(form.category_id!)
   }
 
-  const opts = clubOpts()
 
   // ── Tab button style ──
   const tabStyle = (t: Tab) => ({
