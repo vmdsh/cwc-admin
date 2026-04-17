@@ -145,38 +145,36 @@ export function Products() {
     setDelImg(null); loadImages(form.product_id!)
   }
 
-  // ── AI Catalog Generation ──
+  // ── AI Catalog Generation via Vercel Proxy ──
   const generateAiImages = async () => {
     if (!imgForm.image_url) { setImgErr('Please upload/select a source image first.'); return }
     setIsAiProcessing(true); setImgMsg('AI is creating 4 professional images...')
+    setImgErr('')
     
     const prompts = [
-      `Professional studio shot of ${form.product_name} on a clean light grey background, high-end catalog style`,
-      `Product photography of ${form.product_name} on a white marble surface, bright and airy`,
-      `Artisanal presentation of ${form.product_name} on a light textured wooden table with soft shadows`,
-      `${form.product_name} styled on a minimalist white linen cloth, luxury marketplace aesthetic`
+      `Professional studio shot of ${form.product_name} on a clean light grey background`,
+      `Product photography of ${form.product_name} on a white marble surface`,
+      `Artisanal presentation of ${form.product_name} on a light textured wooden table`,
+      `${form.product_name} styled on a minimalist white linen cloth`
     ];
 
     try {
-      // Get the source image as a blob
-      const imgFetch = await fetch(imgForm.image_url);
-      const sourceBlob = await imgFetch.blob();
-
       for (let i = 0; i < prompts.length; i++) {
-        const formData = new FormData();
-        formData.append('image_file', sourceBlob);
-        formData.append('background.prompt', prompts[i]);
-        formData.append('padding', '0.15'); // 1600x1600 with 1000px zoom look
-        formData.append('output_size', 'large');
-        formData.append('shadow.mode', 'ai.soft');
-
-        const res = await fetch('https://sdk.photoroom.com/v1/editing', {
+        // Call your internal Vercel API instead of Photoroom directly
+        const res = await fetch('/api/photoroom', {
           method: 'POST',
-          headers: { 'x-api-key': import.meta.env.VITE_PHOTOROOM_API_KEY },
-          body: formData
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrl: imgForm.image_url,
+            prompt: prompts[i]
+          })
         });
 
-        if (!res.ok) throw new Error(`Photoroom error: ${res.statusText}`);
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || `Server error: ${res.statusText}`);
+        }
+        
         const resultBlob = await res.blob();
 
         // Upload to Supabase Storage
@@ -187,16 +185,14 @@ export function Products() {
 
         if (uploadErr) throw uploadErr;
 
-        // Get Public URL
         const { data: { publicUrl } } = supabase.storage
           .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
           .getPublicUrl(path);
 
-        // Save to DB
         await supabase.from('product_images').insert({
           product_id: form.product_id,
           image_url: publicUrl,
-          caption: `AI Generated Scene ${i + 1}`,
+          caption: `AI Scene ${i + 1}`,
           sort_order: i + 1
         });
       }
@@ -345,12 +341,11 @@ export function Products() {
                   Images for <strong style={{ color: 'var(--text)' }}>{form.product_name}</strong>
                 </span>
                 <div style={{ display: 'flex', gap: '.5rem' }}>
-                   {/* ADD AI IMAGE BUTTON */}
                   <button 
                     className="btn btn-sm" 
                     style={{ background: 'var(--accent)', color: 'white' }}
                     onClick={generateAiImages}
-                    disabled={isAiProcessing || !images.length && !imgForm.image_url}
+                    disabled={isAiProcessing || (!images.length && !imgForm.image_url)}
                   >
                     {isAiProcessing ? '✨ Processing...' : '✨ ADD AI Images'}
                   </button>
