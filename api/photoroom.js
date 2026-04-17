@@ -9,22 +9,18 @@ export default async function handler(req, res) {
   const PHOTOROOM_URL = 'https://image-api.photoroom.com/v2/edit';
 
   try {
-    // 1. Download image from Supabase
     const response = await axios.get(imageUrl, { 
       responseType: 'arraybuffer',
       timeout: 5000 
     });
     
-    // 2. Prepare Form Data - CRITICAL: Use camelCase keys
     const form = new FormData();
-    // Use 'imageFile' instead of 'image_file'
     form.append('imageFile', Buffer.from(response.data), 'image.jpg');
-    // Use 'background.prompt' (this one was correct)
     form.append('background.prompt', prompt);
     form.append('padding', '0.15');
-    form.append('outputSize', 'large'); // camelCase as per V2 spec
+    // FIXED: Changed 'large' to '1600x1600' to satisfy the pattern requirement
+    form.append('outputSize', '1600x1600'); 
 
-    // 3. Request to Photoroom
     const photoroomRes = await axios.post(PHOTOROOM_URL, form, {
       headers: {
         ...form.getHeaders(),
