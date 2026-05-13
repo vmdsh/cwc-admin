@@ -4,6 +4,8 @@ import { useAdminStore } from '../lib/store'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ImageUpload } from '../components/ImageUpload'
 import { Select } from '../components/Select'
+import { uploadImage } from '../lib/upload'
+import { processToSpec } from '../lib/image-utils'
 import type { Product, ProductImage } from '../types/database'
 
 const EMPTY: Partial<Product> = {
@@ -106,11 +108,19 @@ export function Products() {
       service_type: form.service_type || 'E',
       category_id: form.category_id!, club_id: form.club_id!,
     }
-    const { error } = editing && form.product_id
-      ? await supabase.from('products').update(p).eq('product_id', form.product_id)
-      : await supabase.from('products').insert(p)
+    const { error, data } = editing && form.product_id
+      ? await supabase.from('products').update(p).eq('product_id', form.product_id).select().single()
+      : await supabase.from('products').insert(p).select().single()
+    
     if (error) { setErr(error.message); setMsg(''); return }
-    await loadCaches(); setOpen(false); load()
+    
+    if (data) setForm(data)
+    setMsg('Saved successfully')
+    await loadCaches(); load()
+    // Don't close if we want to stay in edit mode (especially for images)
+    if (!editing) {
+       setEditing(true)
+    }
   }
 
   const doDeleteProd = async () => {
@@ -129,16 +139,32 @@ export function Products() {
   }
   const saveImg = async () => {
     if (!imgForm.image_url) { setImgErr('Image is required'); return }
-    setImgMsg('Saving…'); setImgErr('')
-    const p = {
-      product_id: form.product_id!, image_url: imgForm.image_url!,
-      caption: imgForm.caption || '', sort_order: imgForm.sort_order || 0,
+    setImgMsg('Processing spec & saving…'); setImgErr('')
+    
+    try {
+      const processedBlob = await processToSpec(imgForm.image_url);
+      const fileName = `manual_${Date.now()}.webp`;
+      const filePath = `products/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage.from('coworkclub-media').upload(filePath, processedBlob);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('coworkclub-media').getPublicUrl(filePath);
+
+      const p = {
+        product_id: form.product_id!, image_url: publicUrl,
+        caption: imgForm.caption || '', sort_order: imgForm.sort_order || 0,
+      }
+      const { error } = imgEditing && imgForm.image_id
+        ? await supabase.from('product_images').update(p).eq('image_id', imgForm.image_id)
+        : await supabase.from('product_images').insert(p)
+      
+      if (error) throw error;
+      setImgOpen(false); loadImages(form.product_id!)
+      setImgMsg('Image Saved!');
+    } catch (e: any) {
+      setImgErr(e.message); setImgMsg('')
     }
-    const { error } = imgEditing && imgForm.image_id
-      ? await supabase.from('product_images').update(p).eq('image_id', imgForm.image_id)
-      : await supabase.from('product_images').insert(p)
-    if (error) { setImgErr(error.message); setImgMsg(''); return }
-    setImgOpen(false); loadImages(form.product_id!)
   }
   const doDeleteImg = async () => {
     if (!delImg) return
@@ -146,59 +172,118 @@ export function Products() {
     setDelImg(null); loadImages(form.product_id!)
   }
 
-  // ── AI Creative Suite Logic ──
+  // ── AI Creative Suite Logic (OpenRouter Implementation) ──
+  
+  const extractImageUrl = (response: any): string | null => {
+    if (response.choices?.[0]?.message?.content) {
+      const content = response.choices[0].message.content
+      if (content.startsWith('http')) return content
+      if (content.startsWith('data:image')) return content
+      const urlMatch = content.match(/https?:\/\/[^\s]+/)
+      if (urlMatch) return urlMatch[0]
+    }
+    if (response.data?.[0]?.url) return response.data[0].url
+    if (response.data?.[0]?.b64_json) return `data:image/png;base64,${response.data[0].b64_json}`
+    if (response.url) return response.url
+    if (response.images?.[0]?.url) return response.images[0].url
+    if (response.images?.[0]?.b64_json) return `data:image/png;base64,${response.images[0].b64_json}`
+    if (response.choices?.[0]?.message?.images?.[0]?.image_url?.url) return response.choices[0].message.images[0].image_url.url
+    if (response.choices?.[0]?.message?.images?.[0]?.url) return response.choices[0].message.images[0].url
+    return null
+  }
+
+  const uploadImageFromUrl = async (url: string, folder: string = 'products'): Promise<string> => {
+    const processedBlob = await processToSpec(url)
+    const file = new File([processedBlob], `ai-generated-${Date.now()}.webp`, { type: 'image/webp' })
+    return await uploadImage(file, folder)
+  }
+
   const generateAiImages = async () => {
-    if (!imgForm.image_url) { setImgErr('Please select a source image below first.'); return }
-    setIsAiProcessing(true); setImgMsg('AI is manifesting 4 creative variations...'); setImgErr('')
+    if (!form.product_id) { setImgErr('Please save product info first'); return }
+    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
+    if (!apiKey) { setImgErr('API Key missing'); return }
     
-    const base = customPrompt || `${form.product_name} professional product photography`;
+    setIsAiProcessing(true)
+    setImgErr('')
+    setImgMsg('🤖 Starting AI image generation...')
     
-    // Define variations with their corresponding Database Captions
-    const variations = [
-      { prompt: `${base}, minimalist studio lighting, clean grey background`, label: "AI Studio" },
-      { prompt: `${base}, lifestyle setting, rustic wooden table, soft sunlight`, label: "AI Lifestyle" },
-      { prompt: `${base}, dramatic cinematic lighting, elegant composition`, label: "AI Cinematic" },
-      { prompt: `${base}, bright airy commercial style, high resolution`, label: "AI Commercial" }
-    ];
-
     try {
-      for (let i = 0; i < variations.length; i++) {
-        const res = await fetch('/api/photoroom', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+      // 1. Generate prompts
+      const pRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": window.location.origin
+        },
+        body: JSON.stringify({
+          model: "deepseek/deepseek-chat",
+          messages: [{
+            role: "user",
+            content: `Generate 4 descriptive prompts for image generation of the product: ${form.product_name}. ${customPrompt ? `Context: ${customPrompt}.` : ''} Return ONLY a JSON array of strings in a "prompts" key.`
+          }],
+          response_format: { type: "json_object" }
+        })
+      })
+      
+      if (!pRes.ok) throw new Error(`Prompt generation failed: ${pRes.status}`)
+      
+      const pData = await pRes.json()
+      let raw = pData.choices[0].message.content.trim()
+      const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+      if (jsonMatch) raw = jsonMatch[1]
+      
+      let aiPrompts: string[] = []
+      try {
+        const parsed = JSON.parse(raw)
+        aiPrompts = parsed.prompts || (Array.isArray(parsed) ? parsed : [])
+      } catch (err) {
+        throw new Error('AI returned invalid prompt format')
+      }
+      
+      if (aiPrompts.length === 0) throw new Error('No prompts generated')
+      
+      // 2. Generate images
+      for (let i = 0; i < aiPrompts.length; i++) {
+        setImgMsg(`✨ Generating image ${i + 1} of ${aiPrompts.length}...`)
+        
+        const iRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": window.location.origin
+          },
           body: JSON.stringify({
-            imageUrl: imgForm.image_url,
-            prompt: variations[i].prompt
+            model: import.meta.env.VITE_IMAGE_MODEL_ID || "black-forest-labs/flux.2-pro",
+            modalities: ["image"],
+            messages: [{ role: "user", content: aiPrompts[i] }]
           })
-        });
-
-        if (!res.ok) throw new Error(`Server failed on variation ${i+1}`);
-        const resultBlob = await res.blob();
-
-        const path = `products/ai_${form.product_id}_${Date.now()}_${i}.jpg`;
-        const { error: uploadErr } = await supabase.storage
-          .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
-          .upload(path, resultBlob, { contentType: 'image/jpeg' });
-
-        if (uploadErr) throw uploadErr;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
-          .getPublicUrl(path);
-
+        })
+        
+        if (!iRes.ok) throw new Error(`Image ${i+1} failed: ${iRes.status}`)
+        
+        const iData = await iRes.json()
+        let imageUrl = extractImageUrl(iData)
+        if (!imageUrl) throw new Error(`No URL for image ${i+1}`)
+        
+        setImgMsg(`💾 Uploading image ${i + 1}...`)
+        const uploadedUrl = await uploadImageFromUrl(imageUrl, 'products')
+        
         await supabase.from('product_images').insert({
           product_id: form.product_id,
-          image_url: publicUrl,
-          caption: variations[i].label, // Setting the Caption perfectly here
-          sort_order: i + 1
-        });
+          image_url: uploadedUrl,
+          caption: `AI: ${aiPrompts[i].substring(0, 30)}...`,
+          sort_order: images.length + i + 1
+        })
+        
+        loadImages(form.product_id)
       }
-      setImgMsg('✅ 4 creative variations added!');
-      loadImages(form.product_id!);
+      setImgMsg('✅ AI generation complete!')
     } catch (e: any) {
-      setImgErr(`AI Failed: ${e.message}`);
+      setImgErr(`AI Failed: ${e.message}`)
     } finally {
-      setIsAiProcessing(false);
+      setIsAiProcessing(false)
     }
   }
 
@@ -333,18 +418,13 @@ export function Products() {
 
           {editing && activeTab === 'images' && (
             <div>
-              <div style={{ background: 'rgba(var(--accent-rgb), 0.1)', border: '1px solid var(--accent)', padding: '0.6rem 1rem', borderRadius: '4px', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                <span style={{ color: 'var(--accent)', fontWeight: 700 }}>📐 OUTPUT: 1600x1600 (1:1 Ratio)</span>
-                <span style={{ color: 'var(--text3)' }}>Ready for HD Marketplace Sliders</span>
-              </div>
-
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                 <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>🎨 Creative AI Prompt</span>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>Describe the background/vibe</span>
+                  <span>🎨 AI Image Generation Prompt</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>Optional context for better results</span>
                 </label>
                 <textarea 
-                  placeholder="e.g. On a rustic wooden table with fresh wheat stalks and warm morning sunlight..."
+                  placeholder="e.g. Minimalist studio background, high resolution, soft lighting..."
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   style={{ minHeight: '70px', border: '1px solid var(--border)', borderRadius: '4px', padding: '0.5rem', width: '100%', background: 'var(--bg2)', color: 'var(--text)' }}
@@ -354,11 +434,11 @@ export function Products() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem', marginBottom: '1.5rem' }}>
                 <button 
                   className="btn btn-sm" 
-                  style={{ background: 'var(--accent)', color: 'white', fontWeight: 700 }}
+                  style={{ background: 'gold', color: 'black', fontWeight: 700 }}
                   onClick={generateAiImages}
                   disabled={isAiProcessing}
                 >
-                  {isAiProcessing ? '✨ Processing...' : '✨ GENERATE AI VARIATIONS'}
+                  {isAiProcessing ? '🪄 PROCESSING...' : '✨ AI GENERATE VARIATIONS'}
                 </button>
                 <button className="btn btn-primary btn-sm" onClick={openImgAdd}>+ Add Manual</button>
               </div>
@@ -394,7 +474,7 @@ export function Products() {
               {imgLoading
                 ? <div className="empty"><span className="spinner" />Loading images…</div>
                 : images.length === 0
-                  ? <div style={{ color: 'var(--text3)', fontSize: '.82rem', padding: '1.5rem 0', textAlign: 'center' }}>Upload a base image above to start AI generation.</div>
+                  ? <div style={{ color: 'var(--text3)', fontSize: '.82rem', padding: '1.5rem 0', textAlign: 'center' }}>No images yet. Add manual or use AI.</div>
                   : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '.75rem' }}>
                       {images.map(img => (
@@ -413,6 +493,10 @@ export function Products() {
                     </div>
                   )
               }
+              
+              {imgMsg && <p style={{ color: 'gold', fontSize: '.8rem', marginTop: '1rem' }}>{imgMsg}</p>}
+              {imgErr && <p style={{ color: 'red', fontSize: '.8rem', marginTop: '1rem' }}>{imgErr}</p>}
+
               <div style={{ marginTop: '1.25rem' }}>
                 <button className="btn btn-ghost" onClick={() => setOpen(false)}>Close</button>
               </div>

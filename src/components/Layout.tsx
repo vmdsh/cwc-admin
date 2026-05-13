@@ -9,6 +9,7 @@ const NAV = [
     { path:'/clubs',        label:'Clubs',           icon:'🏛️' },
     { path:'/categories',   label:'Categories',      icon:'📂' },
     { path:'/cat-images',   label:'Category Images', icon:'🖼️' },
+    { path:'/club-prompts', label:'Club Prompts',    icon:'🎨' },
   ]},
   { section:'Products', items:[
     { path:'/products',     label:'Products',        icon:'📦' },

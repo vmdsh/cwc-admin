@@ -8,7 +8,7 @@ import type { ProductCategory, ProductCategoryImage } from '../types/database'
 
 const EMPTY: Partial<ProductCategory> = {
   category_name: '', slug: '', icon_emoji: '', one_word: '',
-  tagline: '', description: '', sort_order: 0, club_id: ''
+  tagline: '', description: '', sort_order: 0, club_id: '', parent_id: ''
 }
 const EMPTY_IMG: Partial<ProductCategoryImage> = {
   category_id: '', image_url: '', title: '', subtitle: '', sort_order: 0
@@ -29,6 +29,9 @@ export function Categories() {
   // ── Category list ──
   const [rows, setRows]       = useState<ProductCategory[]>([])
   const [loading, setLoading] = useState(true)
+
+  // ── Parent category options (filtered by club_id) ──
+  const [parentOpts, setParentOpts] = useState<{ value: string; label: string }[]>([])
 
   // ── Form state ──
   const [form, setForm]       = useState<Partial<ProductCategory>>(EMPTY)
@@ -52,7 +55,7 @@ export function Categories() {
   // ── Load categories ──
   const load = async () => {
     setLoading(true)
-    let q = supabase.from('product_categories').select('*').order('sort_order')
+    let q = supabase.from('product_categories').select('*').eq('is_predefined', false).order('sort_order')
     if (!isSuperAdmin && adminUser?.club_id) q = q.eq('club_id', adminUser.club_id)
     else if (isSuperAdmin && filterClub)     q = q.eq('club_id', filterClub)
     const { data } = await q
@@ -61,6 +64,25 @@ export function Categories() {
   }
 
   useEffect(() => { load() }, [filterClub])
+
+  // ── Load parent category options for a given club_id ──
+  const loadParentOpts = async (clubId: string) => {
+    if (!clubId) { setParentOpts([]); return }
+    const { data } = await supabase
+      .from('product_categories')
+      .select('category_id, category_name')
+      .eq('club_id', clubId)
+      .eq('is_predefined', false)
+      .order('sort_order')
+    setParentOpts(
+      (data || []).map(c => ({ value: c.category_id, label: c.category_name }))
+    )
+  }
+
+  // ── Reload parent opts when the club changes in the form ──
+  useEffect(() => {
+    if (open) loadParentOpts(form.club_id || '')
+  }, [form.club_id, open])
 
   // ── Load images for a category ──
   const loadImages = async (categoryId: string) => {
@@ -76,11 +98,13 @@ export function Categories() {
 
   // ── Open Add ──
   const openAdd = () => {
-    setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '' })
+    const clubId = isSuperAdmin ? (filterClub || '') : adminUser?.club_id || ''
+    setForm({ ...EMPTY, club_id: clubId })
     setEditing(false)
     setActiveTab('details')
     setOpen(true)
     setErr(''); setMsg('')
+    loadParentOpts(clubId)
   }
 
   // ── Open Edit ──
@@ -91,6 +115,7 @@ export function Categories() {
     setOpen(true)
     setErr(''); setMsg('')
     loadImages(r.category_id)
+    loadParentOpts(r.club_id || '')
   }
 
   // ── Save category ──
@@ -106,7 +131,8 @@ export function Categories() {
       description:   form.description || '',
       sort_order:    form.sort_order || 0,
       club_id:       form.club_id!,
-      is_predefined: true,
+      parent_id:     form.parent_id || null,
+      is_predefined: false,
     }
     const { error } = editing && form.category_id
       ? await supabase.from('product_categories').update(p).eq('category_id', form.category_id)
@@ -170,6 +196,11 @@ export function Categories() {
     loadImages(form.category_id!)
   }
 
+  // ── Parent category label helper ──
+  const parentLabel = (parentId?: string | null) => {
+    if (!parentId) return '—'
+    return rows.find(r => r.category_id === parentId)?.category_name || '—'
+  }
 
   // ── Tab button style ──
   const tabStyle = (t: Tab) => ({
@@ -232,29 +263,63 @@ export function Categories() {
           {/* ── DETAILS TAB ── */}
           {(activeTab === 'details' || !editing) && (
             <>
+              {/* Row 1: Category Name + Club */}
               <div className="form-row">
                 <div className="form-group">
                   <label>Category Name</label>
-                  <input value={form.category_name || ''} onChange={e => setForm(f => ({ ...f, category_name: e.target.value }))} placeholder="e.g. Meetup Club" />
+                  <input
+                    value={form.category_name || ''}
+                    onChange={e => setForm(f => ({ ...f, category_name: e.target.value }))}
+                    placeholder="e.g. Meetup Club"
+                  />
                 </div>
                 <div className="form-group">
                   <label>Club</label>
                   {isSuperAdmin
-                    ? <Select value={form.club_id || ''} onChange={v => setForm(f => ({ ...f, club_id: v }))} options={opts} placeholder="— Select Club —" />
+                    ? <Select value={form.club_id || ''} onChange={v => setForm(f => ({ ...f, club_id: v, parent_id: '' }))} options={opts} placeholder="— Select Club —" />
                     : <input value={clubName(adminUser?.club_id)} readOnly style={{ opacity: .7, cursor: 'not-allowed' }} />
                   }
                 </div>
               </div>
+
+              {/* Row 2: Parent Category (full width) */}
+              <div className="form-row">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Parent Category <span style={{ fontSize: '.72rem', fontWeight: 400, color: 'var(--text3)' }}>(optional)</span></label>
+                  <Select
+                    value={form.parent_id || ''}
+                    onChange={v => setForm(f => ({ ...f, parent_id: v || '' }))}
+                    options={
+                      // Exclude the category being edited from its own parent list
+                      parentOpts.filter(o => o.value !== form.category_id)
+                    }
+                    placeholder="— No Parent (Top-level) —"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Slug + Icon Emoji */}
               <div className="form-row">
                 <div className="form-group">
                   <label>Slug</label>
-                  <input value={form.slug || ''} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} placeholder="meetup" />
+                  <input 
+                    list="slug-options"
+                    value={form.slug || ''} 
+                    onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} 
+                    placeholder="e.g. Items" 
+                  />
+                  <datalist id="slug-options">
+                    <option value="Classifieds" />
+                    <option value="Items" />
+                    <option value="Concierage" />
+                  </datalist>
                 </div>
                 <div className="form-group">
                   <label>Icon Emoji</label>
                   <input value={form.icon_emoji || ''} onChange={e => setForm(f => ({ ...f, icon_emoji: e.target.value }))} placeholder="🤝" />
                 </div>
               </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label>One Word</label>
@@ -368,6 +433,7 @@ export function Categories() {
                 <tr>
                   <th>Icon</th>
                   <th>Name</th>
+                  <th>Parent</th>
                   <th>Slug</th>
                   <th>Club</th>
                   <th>Sort</th>
@@ -376,11 +442,12 @@ export function Categories() {
               </thead>
               <tbody>
                 {rows.length === 0
-                  ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>No categories yet.</td></tr>
+                  ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>No categories yet.</td></tr>
                   : rows.map(r => (
                     <tr key={r.category_id}>
                       <td style={{ fontSize: '1.2rem' }}>{r.icon_emoji || '—'}</td>
                       <td style={{ fontWeight: 500, color: 'var(--text)' }}>{r.category_name}</td>
+                      <td style={{ fontSize: '.78rem', color: 'var(--text3)' }}>{parentLabel(r.parent_id)}</td>
                       <td><code style={{ fontSize: '.72rem', color: 'var(--accent)' }}>{r.slug || '—'}</code></td>
                       <td>{clubName(r.club_id)}</td>
                       <td>{r.sort_order || 0}</td>
@@ -403,3 +470,4 @@ export function Categories() {
     </div>
   )
 }
+

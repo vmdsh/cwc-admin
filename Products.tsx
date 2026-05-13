@@ -27,39 +27,42 @@ export function Products() {
   const { adminUser, isSuperAdmin, clubOpts, catOpts, loadCaches, clubName, catName } = useAdminStore()
 
   // ── Filters ──
-  const [filterClub,    setFilterClub]    = useState<string>(isSuperAdmin ? '' : (adminUser?.club_id ?? ''))
-  const [filterCat,     setFilterCat]     = useState<string>('')
-  const [filterSvc,     setFilterSvc]     = useState<string>('')
+  const [filterClub, setFilterClub] = useState<string>(isSuperAdmin ? '' : (adminUser?.club_id ?? ''))
+  const [filterCat, setFilterCat] = useState<string>('')
+  const [filterSvc, setFilterSvc] = useState<string>('')
 
   // ── List ──
-  const [rows,    setRows]    = useState<Product[]>([])
+  const [rows, setRows] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
 
   // ── Form ──
-  const [form,     setForm]     = useState<Partial<Product>>(EMPTY)
-  const [editing,  setEditing]  = useState(false)
-  const [open,     setOpen]     = useState(false)
-  const [activeTab,setActiveTab]= useState<Tab>('details')
-  const [err,  setErr]  = useState('')
-  const [msg,  setMsg]  = useState('')
+  const [form, setForm] = useState<Partial<Product>>(EMPTY)
+  const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<Tab>('details')
+  const [err, setErr] = useState('')
+  const [msg, setMsg] = useState('')
   const [delProd, setDelProd] = useState<Product | null>(null)
 
   // ── Images ──
-  const [images,     setImages]     = useState<ProductImage[]>([])
+  const [images, setImages] = useState<ProductImage[]>([])
   const [imgLoading, setImgLoading] = useState(false)
-  const [imgForm,    setImgForm]    = useState<Partial<ProductImage>>(EMPTY_IMG)
+  const [imgForm, setImgForm] = useState<Partial<ProductImage>>(EMPTY_IMG)
   const [imgEditing, setImgEditing] = useState(false)
-  const [imgOpen,    setImgOpen]    = useState(false)
-  const [imgErr,     setImgErr]     = useState('')
-  const [imgMsg,     setImgMsg]     = useState('')
-  const [delImg,     setDelImg]     = useState<ProductImage | null>(null)
+  const [imgOpen, setImgOpen] = useState(false)
+  const [imgErr, setImgErr] = useState('')
+  const [imgMsg, setImgMsg] = useState('')
+  const [delImg, setDelImg] = useState<ProductImage | null>(null)
 
-  // ── Load products ──
+  // ── AI Creative Suite State ──
+  const [isAiProcessing, setIsAiProcessing] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState('')
+
   const load = async () => {
     setLoading(true)
     let q = supabase.from('products').select('*')
     if (!isSuperAdmin && adminUser?.club_id) q = q.eq('club_id', adminUser.club_id)
-    else if (isSuperAdmin && filterClub)     q = q.eq('club_id', filterClub)
+    else if (isSuperAdmin && filterClub) q = q.eq('club_id', filterClub)
     if (filterCat) q = q.eq('category_id', filterCat)
     if (filterSvc) q = q.eq('service_type', filterSvc)
     const { data } = await q
@@ -69,10 +72,8 @@ export function Products() {
 
   useEffect(() => { load() }, [filterClub, filterCat, filterSvc])
 
-  // Reset category filter when club changes
   const handleFilterClub = (v: string) => { setFilterClub(v); setFilterCat('') }
 
-  // ── Load images ──
   const loadImages = async (productId: string) => {
     setImgLoading(true)
     const { data } = await supabase
@@ -82,21 +83,18 @@ export function Products() {
     setImgLoading(false)
   }
 
-  // ── Open Add ──
   const openAdd = () => {
     setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '' })
     setEditing(false); setActiveTab('details')
     setOpen(true); setErr(''); setMsg('')
   }
 
-  // ── Open Edit ──
   const openEdit = (r: Product) => {
     setForm(r); setEditing(true); setActiveTab('details')
     setOpen(true); setErr(''); setMsg('')
     loadImages(r.product_id)
   }
 
-  // ── Save product ──
   const save = async () => {
     if (!form.product_name || !form.club_id || !form.category_id) {
       setErr('Name, Club and Category required'); return
@@ -115,7 +113,6 @@ export function Products() {
     await loadCaches(); setOpen(false); load()
   }
 
-  // ── Delete product ──
   const doDeleteProd = async () => {
     if (!delProd) return
     await supabase.from('products').delete().eq('product_id', delProd.product_id)
@@ -149,11 +146,66 @@ export function Products() {
     setDelImg(null); loadImages(form.product_id!)
   }
 
-  const clubOptions = clubOpts()
-  const catOptions  = catOpts('', filterClub || form.club_id || '')
+  // ── AI Creative Suite Logic ──
+  const generateAiImages = async () => {
+    if (!imgForm.image_url) { setImgErr('Please select a source image below first.'); return }
+    setIsAiProcessing(true); setImgMsg('AI is manifesting 4 creative variations...'); setImgErr('')
+    
+    const base = customPrompt || `${form.product_name} professional product photography`;
+    
+    // Define variations with their corresponding Database Captions
+    const variations = [
+      { prompt: `${base}, minimalist studio lighting, clean grey background`, label: "AI Studio" },
+      { prompt: `${base}, lifestyle setting, rustic wooden table, soft sunlight`, label: "AI Lifestyle" },
+      { prompt: `${base}, dramatic cinematic lighting, elegant composition`, label: "AI Cinematic" },
+      { prompt: `${base}, bright airy commercial style, high resolution`, label: "AI Commercial" }
+    ];
 
-  // Set default club filter for superadmin (first club)
+    try {
+      for (let i = 0; i < variations.length; i++) {
+        const res = await fetch('/api/photoroom', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrl: imgForm.image_url,
+            prompt: variations[i].prompt
+          })
+        });
+
+        if (!res.ok) throw new Error(`Server failed on variation ${i+1}`);
+        const resultBlob = await res.blob();
+
+        const path = `products/ai_${form.product_id}_${Date.now()}_${i}.jpg`;
+        const { error: uploadErr } = await supabase.storage
+          .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
+          .upload(path, resultBlob, { contentType: 'image/jpeg' });
+
+        if (uploadErr) throw uploadErr;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from(import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'media')
+          .getPublicUrl(path);
+
+        await supabase.from('product_images').insert({
+          product_id: form.product_id,
+          image_url: publicUrl,
+          caption: variations[i].label, // Setting the Caption perfectly here
+          sort_order: i + 1
+        });
+      }
+      setImgMsg('✅ 4 creative variations added!');
+      loadImages(form.product_id!);
+    } catch (e: any) {
+      setImgErr(`AI Failed: ${e.message}`);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  }
+
+  const clubOptions = clubOpts()
+  const catOptions = catOpts('', filterClub || form.club_id || '')
   const hasSetDefault = useRef(false)
+
   useEffect(() => {
     if (isSuperAdmin && !filterClub && clubOptions.length > 0 && !hasSetDefault.current) {
       setFilterClub(clubOptions[0].value)
@@ -175,7 +227,6 @@ export function Products() {
 
   return (
     <div>
-      {/* ── Header ── */}
       <div className="section-header">
         <div>
           <div className="section-title">Products</div>
@@ -184,9 +235,7 @@ export function Products() {
         <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Product</button>
       </div>
 
-      {/* ── Filter Bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        {/* Club — superadmin only */}
         {isSuperAdmin && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
             <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Club</span>
@@ -197,8 +246,6 @@ export function Products() {
             </select>
           </div>
         )}
-
-        {/* Category */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Category</span>
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
@@ -207,8 +254,6 @@ export function Products() {
             {catOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-
-        {/* Service Type */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
           <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Type</span>
           <select value={filterSvc} onChange={e => setFilterSvc(e.target.value)}
@@ -217,8 +262,6 @@ export function Products() {
             {SVC_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </div>
-
-        {/* Clear filters */}
         {(filterCat || filterSvc || (isSuperAdmin && filterClub)) && (
           <button className="btn btn-ghost btn-sm"
             onClick={() => { setFilterCat(''); setFilterSvc(''); if (isSuperAdmin) setFilterClub('') }}>
@@ -227,19 +270,16 @@ export function Products() {
         )}
       </div>
 
-      {/* ── Form Panel ── */}
       {open && (
         <div className="form-panel open">
-          {/* Tabs — edit mode only */}
           {editing && (
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
               <button style={tabStyle('details')} onClick={() => setActiveTab('details')}>📋 Details</button>
-              <button style={tabStyle('images')}  onClick={() => setActiveTab('images')}>🖼️ Images</button>
+              <button style={tabStyle('images')} onClick={() => setActiveTab('images')}>🖼️ Images</button>
             </div>
           )}
           {!editing && <div className="form-panel-title">✏️ Add Product</div>}
 
-          {/* ── DETAILS TAB ── */}
           {(activeTab === 'details' || !editing) && (
             <>
               <div className="form-row">
@@ -291,17 +331,38 @@ export function Products() {
             </>
           )}
 
-          {/* ── IMAGES TAB ── */}
           {editing && activeTab === 'images' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '.78rem', color: 'var(--text3)' }}>
-                  Images for <strong style={{ color: 'var(--text)' }}>{form.product_name}</strong>
-                </span>
-                <button className="btn btn-primary btn-sm" onClick={openImgAdd}>+ Add Image</button>
+              <div style={{ background: 'rgba(var(--accent-rgb), 0.1)', border: '1px solid var(--accent)', padding: '0.6rem 1rem', borderRadius: '4px', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                <span style={{ color: 'var(--accent)', fontWeight: 700 }}>📐 OUTPUT: 1600x1600 (1:1 Ratio)</span>
+                <span style={{ color: 'var(--text3)' }}>Ready for HD Marketplace Sliders</span>
               </div>
 
-              {/* Image form */}
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>🎨 Creative AI Prompt</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>Describe the background/vibe</span>
+                </label>
+                <textarea 
+                  placeholder="e.g. On a rustic wooden table with fresh wheat stalks and warm morning sunlight..."
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  style={{ minHeight: '70px', border: '1px solid var(--border)', borderRadius: '4px', padding: '0.5rem', width: '100%', background: 'var(--bg2)', color: 'var(--text)' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem', marginBottom: '1.5rem' }}>
+                <button 
+                  className="btn btn-sm" 
+                  style={{ background: 'var(--accent)', color: 'white', fontWeight: 700 }}
+                  onClick={generateAiImages}
+                  disabled={isAiProcessing}
+                >
+                  {isAiProcessing ? '✨ Processing...' : '✨ GENERATE AI VARIATIONS'}
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={openImgAdd}>+ Add Manual</button>
+              </div>
+
               {imgOpen && (
                 <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', padding: '1rem', marginBottom: '1rem' }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '.75rem' }}>
@@ -330,18 +391,17 @@ export function Products() {
                 </div>
               )}
 
-              {/* Image grid */}
               {imgLoading
                 ? <div className="empty"><span className="spinner" />Loading images…</div>
                 : images.length === 0
-                  ? <div style={{ color: 'var(--text3)', fontSize: '.82rem', padding: '1.5rem 0', textAlign: 'center' }}>No images yet — click "+ Add Image" to upload one.</div>
+                  ? <div style={{ color: 'var(--text3)', fontSize: '.82rem', padding: '1.5rem 0', textAlign: 'center' }}>Upload a base image above to start AI generation.</div>
                   : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '.75rem' }}>
                       {images.map(img => (
-                        <div key={img.image_id} style={{ border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden' }}>
+                        <div key={img.image_id} style={{ border: '1px solid var(--border)', background: 'var(--bg2)', overflow: 'hidden', borderRadius: '4px' }}>
                           <img src={img.image_url} alt={img.caption || ''} style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }} />
                           <div style={{ padding: '.5rem .6rem' }}>
-                            <div style={{ fontSize: '.75rem', color: 'var(--text)', marginBottom: '.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.caption || '—'}</div>
+                            <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--text)', marginBottom: '.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.caption || '—'}</div>
                             <div style={{ fontSize: '.68rem', color: 'var(--text3)', marginBottom: '.5rem' }}>Sort: {img.sort_order ?? 0}</div>
                             <div style={{ display: 'flex', gap: '.4rem' }}>
                               <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => openImgEdit(img)}>Edit</button>
@@ -361,7 +421,6 @@ export function Products() {
         </div>
       )}
 
-      {/* ── Table ── */}
       {loading
         ? <div className="empty"><span className="spinner" />Loading…</div>
         : (
@@ -394,7 +453,7 @@ export function Products() {
       }
 
       {delProd && <ConfirmDialog message={`Delete "${delProd.product_name}"?`} onConfirm={doDeleteProd} onCancel={() => setDelProd(null)} />}
-      {delImg  && <ConfirmDialog message="Delete this image?" onConfirm={doDeleteImg} onCancel={() => setDelImg(null)} />}
+      {delImg && <ConfirmDialog message="Delete this image?" onConfirm={doDeleteImg} onCancel={() => setDelImg(null)} />}
     </div>
   )
 }

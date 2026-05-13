@@ -13,6 +13,10 @@ export interface Club {
   vision_html?:   string | null
   contact_email?: string | null
   contact_phone?: string | null
+  data_lang?:     string | null
+  speak_lang?:    string | null
+  currency?:      string | null
+  prompt_welcome?: string | null
 }
 export interface ClubImage {
   image_id:   string
@@ -20,11 +24,14 @@ export interface ClubImage {
   image_url:  string
   caption?:   string | null
   sort_order?: number | null
+  prompt_id?: string | null
+  slug?: string | null
 }
 export interface ProductCategory {
   category_id: string; category_name: string; slug?: string
   icon_emoji?: string; one_word?: string; tagline?: string
   description?: string; sort_order?: number; club_id: string
+  parent_id?: string | null
   is_predefined?: boolean; created_at?: string
 }
 export interface ProductCategoryImage {
@@ -67,6 +74,7 @@ export interface ShopProduct {
 export interface User {
   user_id: string; name?: string; email: string; password?: string
   role?: 'superadmin' | 'clubadmin' | 'member'; club_id?: string; created_at?: string
+  speak_lang?: string; keyboard_lang?: string
 }
 export interface UserAddress {
   address_id: string; user_id?: string; label?: string; address: string
@@ -106,4 +114,19 @@ export interface RouteBooking {
 export interface AgentLocation {
   id: string; driver_id: string; movement_id?: string
   lat?: number; lng?: number; is_online?: boolean; updated_at?: string
+}
+
+export interface ClubImagePrompt {
+  prompt_id: string
+  club_id: string
+  image_type?: string | null
+  image_spec?: string | null
+  image_prompt?: string | null
+  image_layout?: string | null
+  image_output?: string | null
+  image_title?: string | null
+  image_id?: string | null
+  image_url?: string | null
+  image_nos?: number | null
+  created_at?: string
 }

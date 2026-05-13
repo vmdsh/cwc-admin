@@ -20,6 +20,7 @@ import { AgentLoc }    from './pages/AgentLoc'
 import { Users }       from './pages/Users'
 import { UserAddresses }from './pages/UserAddresses'
 import { UserProfiles } from './pages/UserProfiles'
+import { ClubImagePrompts } from './pages/ClubImagePrompts'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const adminUser = useAdminStore(s => s.adminUser)
@@ -30,23 +31,28 @@ export default function App() {
   const { setAdminUser, loadCaches, setTheme } = useAdminStore()
 
   useEffect(() => {
-    // Apply saved theme immediately
     const saved = localStorage.getItem('cwc_theme') as 'dark' | 'fresh' | 'bold' | null
     if (saved) setTheme(saved)
-    // Restore session
+
     const user = restoreAdminSession()
-    if (user) { setAdminUser(user); loadCaches() }
+    if (user) { 
+      setAdminUser(user)
+      loadCaches() 
+    }
   }, [])
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        
         <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index               element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard"    element={<Dashboard />} />
           <Route path="clubs"        element={<Clubs />} />
           <Route path="categories"   element={<Categories />} />
+          {/* Note: CategoryImages route will be added here once the file is created */}
+          <Route path="club-prompts" element={<ClubImagePrompts />} />
           <Route path="products"     element={<Products />} />
           <Route path="members"      element={<Members />} />
           <Route path="shops"        element={<Shops />} />
@@ -61,6 +67,7 @@ export default function App() {
           <Route path="user-addresses" element={<UserAddresses />} />
           <Route path="user-profiles"  element={<UserProfiles />} />
         </Route>
+
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

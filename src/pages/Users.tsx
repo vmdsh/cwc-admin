@@ -4,7 +4,15 @@ import { useAdminStore } from '../lib/store'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Select } from '../components/Select'
 import type { User } from '../types/database'
-const E:Partial<User>={ name:'', email:'', password:'', role:'member', club_id:'' }
+const E:Partial<User>={ name:'', email:'', password:'', role:'member', club_id:'', speak_lang:'ml-IN', keyboard_lang:'en_GB' }
+const LANGS = [
+  { v: 'en_GB', l: 'English (UK)' },
+  { v: 'de-LU', l: 'German (LU)' },
+  { v: 'ar-SA', l: 'Arabic (SA)' },
+  { v: 'fr-LU', l: 'French (LU)' },
+  { v: 'ml-IN', l: 'Malayalam' },
+  { v: 'hi_IN', l: 'Hindi' },
+]
 export function Users() {
   const { adminUser, isSuperAdmin, clubOpts, loadCaches, clubName } = useAdminStore()
   
@@ -40,7 +48,15 @@ export function Users() {
   const save=async()=>{
     if(!form.name||!form.email){ setErr('Name and Email required'); return }
     setMsg('Saving…'); setErr('')
-    const p={ name:form.name!, email:form.email!, password:form.password||'', role:form.role||'member', club_id:form.club_id||null }
+    const p={ 
+      name:form.name!, 
+      email:form.email!, 
+      password:form.password||'', 
+      role:form.role||'member', 
+      club_id:form.club_id||null,
+      speak_lang: form.speak_lang || 'ml-IN',
+      keyboard_lang: form.keyboard_lang || 'en_GB'
+    }
     const{error}=editing&&form.user_id ? await supabase.from('users').update(p).eq('user_id',form.user_id) : await supabase.from('users').insert(p)
     if(error){ setErr(error.message); setMsg(''); return }
     await loadCaches(); setOpen(false); load()
@@ -87,6 +103,18 @@ export function Users() {
             </select>
           </div>
         </div>
+        <div className="form-row">
+          <div className="form-group"><label>Speak Language</label>
+            <select value={form.speak_lang || ''} onChange={e => setForm(f => ({ ...f, speak_lang: e.target.value }))}>
+              <option value="">— Select Language —</option>
+              {LANGS.map(l => <option key={l.v} value={l.v}>{l.l}</option>)}
+            </select>
+          </div>
+          <div className="form-group"><label>Keyboard Language</label>
+            <input list="kbLangs" value={form.keyboard_lang||''} onChange={e=>setForm(f=>({...f,keyboard_lang:e.target.value}))} placeholder="e.g. en"/>
+            <datalist id="kbLangs">{LANGS.map(l=><option key={l.v} value={l.v}>{l.l}</option>)}</datalist>
+          </div>
+        </div>
         <div className="form-group"><label>Club</label><Select value={form.club_id||''} onChange={v=>setForm(f=>({...f,club_id:v}))} options={clubOpts()} placeholder="— Select Club —"/></div>
         <div style={{display:'flex',gap:'.75rem',alignItems:'center'}}>
           <button className="btn btn-primary" onClick={save}>Save</button>
@@ -96,12 +124,16 @@ export function Users() {
       </div>}
       {loading?<div className="empty"><span className="spinner"/>Loading…</div>:(
         <div className="tbl-wrap"><table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Club</th><th>Actions</th></tr></thead>
-          <tbody>{rows.length===0?<tr><td colSpan={5} style={{textAlign:'center',padding:'2rem',color:'var(--text3)'}}>No users.</td></tr>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Languages</th><th>Club</th><th>Actions</th></tr></thead>
+          <tbody>{rows.length===0?<tr><td colSpan={6} style={{textAlign:'center',padding:'2rem',color:'var(--text3)'}}>No users.</td></tr>
           :rows.map(r=><tr key={r.user_id}>
             <td style={{fontWeight:500,color:'var(--text)'}}>{r.name||'—'}</td>
             <td style={{color:'var(--text2)'}}>{r.email}</td>
             <td><span className="badge badge-role">{r.role||'member'}</span></td>
+            <td>
+              <div style={{fontSize:'0.75rem', color:'var(--text3)'}}>Speak: <span style={{color:'var(--text2)'}}>{r.speak_lang||'ml-IN'}</span></div>
+              <div style={{fontSize:'0.75rem', color:'var(--text3)'}}>Kbd: <span style={{color:'var(--text2)'}}>{r.keyboard_lang||'en_GB'}</span></div>
+            </td>
             <td>{clubName(r.club_id)}</td>
             <td className="td-actions">
               <button className="btn btn-ghost btn-sm" onClick={()=>{ setForm(r); setEditing(true); setOpen(true); setErr(''); setMsg('') }}>Edit</button>
