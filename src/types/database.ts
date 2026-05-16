@@ -93,7 +93,7 @@ export interface Route {
 }
 export interface RouteWaypoint {
   way_id: string; route_id: string; way_name: string
-  sequence: number; lat: number; lng: number
+  sequence: number; lat: number; lng: number; club_id?: string
 }
 export interface RouteMovement {
   movement_id: string; route_id: string; shop_id?: string; driver_id?: string
