@@ -73,7 +73,7 @@ export interface ShopProduct {
 }
 export interface User {
   user_id: string; name?: string; email: string; password?: string
-  role?: 'superadmin' | 'clubadmin' | 'member'; club_id?: string; created_at?: string
+  role?: 'superadmin' | 'clubadmin' | 'member' | 'errand' | 'vendadmin' | 'custadmin'; club_id?: string; created_at?: string
   speak_lang?: string; keyboard_lang?: string
 }
 export interface UserAddress {

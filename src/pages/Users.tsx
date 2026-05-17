@@ -99,6 +99,9 @@ export function Users() {
             <select value={form.role||'member'} onChange={e=>setForm(f=>({...f,role:e.target.value as User['role']}))}>
               <option value="member">Member</option>
               <option value="clubadmin">Club Admin</option>
+              <option value="errand">Errand</option>
+              <option value="vendadmin">Vendor Admin</option>
+              <option value="custadmin">Customer Admin</option>
               {isSuperAdmin&&<option value="superadmin">Super Admin</option>}
             </select>
           </div>
