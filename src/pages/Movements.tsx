@@ -8,7 +8,7 @@ type St='scheduled'|'in_progress'|'completed'|'cancelled'
 const SB:Record<St,string>={ scheduled:'badge-role', in_progress:'badge-active', completed:'badge-inactive', cancelled:'badge-inactive' }
 const E:Partial<RouteMovement>={ route_id:'', shop_id:'', driver_id:'', movement_date:'', start_time:'', end_time:'', status:'scheduled', notes:'' }
 export function Movements() {
-  const { routeOpts, shopOpts, userOpts, routeName, shopName, userName, loadDeliveryCaches } = useAdminStore()
+  const { routeOpts, shopOpts, driverOpts, routeName, shopName, userName, loadDeliveryCaches } = useAdminStore()
   const [rows,setRows]=useState<RouteMovement[]>([]); const [loading,setLoading]=useState(true)
   const [form,setForm]=useState<Partial<RouteMovement>>(E); const [editing,setEditing]=useState(false)
   const [open,setOpen]=useState(false); const [err,setErr]=useState(''); const [msg,setMsg]=useState('')
@@ -37,7 +37,7 @@ export function Movements() {
           <div className="form-group"><label>Shop (Seller)</label><Select value={form.shop_id||''} onChange={v=>setForm(f=>({...f,shop_id:v}))} options={shopOpts()} placeholder="— Select Shop —"/></div>
         </div>
         <div className="form-row">
-          <div className="form-group"><label>Driver</label><Select value={form.driver_id||''} onChange={v=>setForm(f=>({...f,driver_id:v}))} options={userOpts()} placeholder="— Select Driver —"/></div>
+          <div className="form-group"><label>Driver</label><Select value={form.driver_id||''} onChange={v=>setForm(f=>({...f,driver_id:v}))} options={driverOpts()} placeholder="— Select Driver —"/></div>
           <div className="form-group"><label>Movement Date</label><input type="date" value={form.movement_date||''} onChange={e=>setForm(f=>({...f,movement_date:e.target.value}))}/></div>
         </div>
         <div className="form-row-3">

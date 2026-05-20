@@ -17,6 +17,7 @@ export interface Club {
   speak_lang?:    string | null
   currency?:      string | null
   prompt_welcome?: string | null
+  slug?:          string | null
 }
 export interface ClubImage {
   image_id:   string
@@ -70,11 +71,17 @@ export interface ShopImage {
 export interface ShopProduct {
   id: string; shop_id: string; product_id: string
   price_override?: number | null; is_available?: boolean
+  stock_qty?: number
+  ord_qty?: number
+  del_qty?: number
+  bal_qty?: number
+  priority?: number
 }
 export interface User {
   user_id: string; name?: string; email: string; password?: string
   role?: 'superadmin' | 'clubadmin' | 'member' | 'errand' | 'vendadmin' | 'custadmin'; club_id?: string; created_at?: string
   speak_lang?: string; keyboard_lang?: string
+  phone?: string; user_whatsapp?: string
 }
 export interface UserAddress {
   address_id: string; user_id?: string; label?: string; address: string

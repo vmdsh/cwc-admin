@@ -26,7 +26,7 @@ const SVC_TYPES: { value: string; label: string }[] = [
 ]
 
 export function Products() {
-  const { adminUser, isSuperAdmin, clubOpts, catOpts, loadCaches, clubName, catName } = useAdminStore()
+  const { adminUser, isSuperAdmin, clubs, categories, clubOpts, catOpts, loadCaches, clubName, catName } = useAdminStore()
 
   // ── Filters ──
   const [filterClub, setFilterClub] = useState<string>(isSuperAdmin ? '' : (adminUser?.club_id ?? ''))
@@ -73,6 +73,12 @@ export function Products() {
   }
 
   useEffect(() => { load() }, [filterClub, filterCat, filterSvc])
+
+  useEffect(() => {
+    if (clubs.length === 0 || categories.length === 0) {
+      loadCaches()
+    }
+  }, [])
 
   const handleFilterClub = (v: string) => { setFilterClub(v); setFilterCat('') }
 

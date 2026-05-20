@@ -14,6 +14,7 @@ interface AdminStore {
   loadCaches: () => Promise<void>
   loadDeliveryCaches: () => Promise<void>
   clubName: (id?: string | null) => string
+  clubSlug: (id?: string | null) => string
   catName:  (id?: string | null) => string
   prodName: (id?: string | null) => string
   shopName: (id?: string | null) => string
@@ -25,6 +26,7 @@ interface AdminStore {
   prodOpts: (sel?: string) => Opt[]
   shopOpts: (sel?: string) => Opt[]
   userOpts: (sel?: string) => Opt[]
+  driverOpts: () => Opt[]
   routeOpts:(sel?: string) => Opt[]
   movementOpts:(sel?: string) => Opt[]
 }
@@ -85,6 +87,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   },
 
   clubName:  (id) => get().clubs.find(c=>c.club_id===id)?.club_name || s(id),
+  clubSlug:  (id) => { const c=get().clubs.find(c=>c.club_id===id); return c?(c.slug||c.club_name):s(id) },
   catName:   (id) => get().categories.find(c=>c.category_id===id)?.category_name || s(id),
   prodName:  (id) => get().products.find(p=>p.product_id===id)?.product_name || s(id),
   shopName:  (id) => get().shops.find(sh=>sh.shop_id===id)?.shop_name || s(id),
@@ -107,6 +110,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   prodOpts:  () => get().products.map(p=>({ value:p.product_id, label:p.product_name })),
   shopOpts:  () => get().shops.map(sh=>({ value:sh.shop_id, label:sh.shop_name })),
   userOpts:  () => get().users.map(u=>({ value:u.user_id, label:u.name||u.email })),
+  driverOpts:() => get().users.filter(u=>u.role==='errand').map(u=>({ value:u.user_id, label:u.name||u.email })),
   routeOpts: () => get().routes.map(r=>({ value:r.route_id, label:r.route_name })),
   movementOpts: () => get().movements.map(m=>({ value:m.movement_id, label:`${get().routeName(m.route_id)} · ${m.movement_date} [${m.status}]` })),
 }))
