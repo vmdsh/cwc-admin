@@ -54,7 +54,7 @@ export interface ProductUser {
 }
 export interface Shop {
   shop_id: string; shop_name: string; club_id: string
-  shop_type?: 'physical' | 'onwheel' | 'online'
+  shop_type?: 'physical' | 'onwheel' | 'onwheel-shop' | 'online'
   contact?: string; address?: string; description?: string
   is_active?: boolean; created_at?: string
   shop_emoji?:   string | null
@@ -137,3 +137,14 @@ export interface ClubImagePrompt {
   image_nos?: number | null
   created_at?: string
 }
+
+export interface RunnerService {
+  id: string;
+  user_id: string;
+  product_id: string;
+  service_price: number;
+  service_uom: string;
+  service_description?: string | null;
+  created_at?: string;
+}
+

@@ -21,6 +21,7 @@ import { Users }       from './pages/Users'
 import { UserAddresses }from './pages/UserAddresses'
 import { UserProfiles } from './pages/UserProfiles'
 import { ClubImagePrompts } from './pages/ClubImagePrompts'
+import { RunnerServices } from './pages/RunnerServices'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const adminUser = useAdminStore(s => s.adminUser)
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="users"        element={<Users />} />
           <Route path="user-addresses" element={<UserAddresses />} />
           <Route path="user-profiles"  element={<UserProfiles />} />
+          <Route path="runner-services" element={<RunnerServices />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

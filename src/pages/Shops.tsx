@@ -228,7 +228,7 @@ export function Shops() {
   })
 
   const typeLabel = (v?: string) =>
-    v === 'physical' ? 'Physical' : v === 'onwheel' ? 'On the Wheel' : v === 'online' ? 'Online' : '—'
+    v === 'physical' ? 'Physical' : v === 'onwheel' ? 'On the Wheel' : v === 'onwheel-shop' ? 'Moving Shops' : v === 'online' ? 'Online' : '—'
 
   return (
     <div>
@@ -314,6 +314,7 @@ export function Shops() {
                   <select value={form.shop_type || 'physical'} onChange={e => setForm(f => ({ ...f, shop_type: e.target.value as Shop['shop_type'] }))}>
                     <option value="physical">Physical</option>
                     <option value="onwheel">On the Wheel</option>
+                    <option value="onwheel-shop">Moving Shops</option>
                     <option value="online">Online</option>
                   </select>
                 </div>
