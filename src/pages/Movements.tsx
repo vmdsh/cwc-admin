@@ -6,19 +6,27 @@ import { Select } from '../components/Select'
 import type { RouteMovement } from '../types/database'
 type St='scheduled'|'in_progress'|'completed'|'cancelled'
 const SB:Record<St,string>={ scheduled:'badge-role', in_progress:'badge-active', completed:'badge-inactive', cancelled:'badge-inactive' }
-const E:Partial<RouteMovement>={ route_id:'', shop_id:'', driver_id:'', movement_date:'', start_time:'', end_time:'', status:'scheduled', notes:'' }
+const E:Partial<RouteMovement>={ route_id:'', shop_id:'', driver_id:'', movement_date:'', start_time:'', end_time:'', status:'scheduled', notes:'', vendor_id:null }
 export function Movements() {
-  const { routeOpts, shopOpts, driverOpts, routeName, shopName, userName, loadDeliveryCaches } = useAdminStore()
+  const { isVendor, vendor_id, routeOpts, shopOpts, driverOpts, routeName, shopName, userName, loadDeliveryCaches } = useAdminStore()
   const [rows,setRows]=useState<RouteMovement[]>([]); const [loading,setLoading]=useState(true)
   const [form,setForm]=useState<Partial<RouteMovement>>(E); const [editing,setEditing]=useState(false)
   const [open,setOpen]=useState(false); const [err,setErr]=useState(''); const [msg,setMsg]=useState('')
   const [del,setDel]=useState<RouteMovement|null>(null)
-  const load=async()=>{ setLoading(true); await loadDeliveryCaches(); const{data}=await supabase.from('route_movements').select('*').order('movement_date',{ascending:false}); setRows(data||[]); setLoading(false) }
+  const load=async()=>{ 
+    setLoading(true); 
+    await loadDeliveryCaches(); 
+    let q=supabase.from('route_movements').select('*').order('movement_date',{ascending:false});
+    if (isVendor && vendor_id) q=q.eq('vendor_id', vendor_id);
+    const{data}=await q; 
+    setRows(data||[]); 
+    setLoading(false) 
+  }
   useEffect(()=>{ load() },[])
   const save=async()=>{
     if(!form.route_id||!form.movement_date){ setErr('Route and Date required'); return }
     setMsg('Saving…'); setErr('')
-    const p={ route_id:form.route_id!, shop_id:form.shop_id||null, driver_id:form.driver_id||null, movement_date:form.movement_date!, start_time:form.start_time||null, end_time:form.end_time||null, status:form.status||'scheduled', notes:form.notes||'' }
+    const p={ route_id:form.route_id!, shop_id:form.shop_id||null, driver_id:form.driver_id||null, movement_date:form.movement_date!, start_time:form.start_time||null, end_time:form.end_time||null, status:form.status||'scheduled', notes:form.notes||'', vendor_id: isVendor ? vendor_id : form.vendor_id }
     const{error}=editing&&form.movement_id ? await supabase.from('route_movements').update(p).eq('movement_id',form.movement_id) : await supabase.from('route_movements').insert(p)
     if(error){ setErr(error.message); setMsg(''); return }
     await loadDeliveryCaches(); setOpen(false); load()
@@ -28,7 +36,7 @@ export function Movements() {
     <div>
       <div className="section-header">
         <div><div className="section-title">Route Movements</div><div className="section-sub">Trip scheduling — {rows.length} movements</div></div>
-        <button className="btn btn-primary btn-sm" onClick={()=>{ setForm({...E,movement_date:new Date().toISOString().slice(0,10)}); setEditing(false); setOpen(true); setErr(''); setMsg('') }}>+ Schedule Movement</button>
+        <button className="btn btn-primary btn-sm" onClick={()=>{ setForm({...E,movement_date:new Date().toISOString().slice(0,10), vendor_id: vendor_id || null}); setEditing(false); setOpen(true); setErr(''); setMsg('') }}>+ Schedule Movement</button>
       </div>
       {open&&<div className="form-panel open">
         <div className="form-panel-title">✏️ {editing?'Edit':'Schedule'} Movement</div>

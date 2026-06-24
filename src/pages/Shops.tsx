@@ -15,6 +15,7 @@ const EMPTY: Partial<Shop> = {
   contact: '', address: '', description: '',
   shop_emoji: '', shop_tagline: '',
   lat: undefined, lng: undefined,
+  vendor_id: null
 }
 
 const EMPTY_IMG: Partial<ShopImage> = {
@@ -80,7 +81,7 @@ function MapPicker({
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function Shops() {
-  const { adminUser, isSuperAdmin, clubOpts, loadCaches, clubName } = useAdminStore()
+  const { adminUser, isSuperAdmin, isVendor, vendor_id, clubOpts, loadCaches, clubName } = useAdminStore()
 
   // ── Club filter ──
   const clubOptions = clubOpts()
@@ -117,7 +118,8 @@ export function Shops() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('shops').select('*')
-    if (!isSuperAdmin && adminUser?.club_id) q = q.eq('club_id', adminUser.club_id)
+    if (isVendor && vendor_id) q = q.eq('vendor_id', vendor_id)
+    else if (!isSuperAdmin && adminUser?.club_id) q = q.eq('club_id', adminUser.club_id)
     else if (isSuperAdmin && filterClub)     q = q.eq('club_id', filterClub)
     const { data } = await q
     setRows(data || [])
@@ -138,7 +140,7 @@ export function Shops() {
 
   // ── Open Add ──
   const openAdd = () => {
-    setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '' })
+    setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '', vendor_id: vendor_id || null })
     setEditing(false); setActiveTab('details')
     setOpen(true); setShowMap(false); setErr(''); setMsg('')
   }
@@ -173,6 +175,7 @@ export function Shops() {
       lat:          form.lat          ?? null,
       lng:          form.lng          ?? null,
       coords:       buildCoords(form.lat, form.lng), // auto-derived
+      vendor_id:    isVendor ? vendor_id : form.vendor_id,
     }
     const { error } = editing && form.shop_id
       ? await supabase.from('shops').update(p).eq('shop_id', form.shop_id)

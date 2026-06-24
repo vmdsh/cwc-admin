@@ -4,9 +4,9 @@ import { useAdminStore } from '../lib/store'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Select } from '../components/Select'
 import type { Route } from '../types/database'
-const E:Partial<Route>={ route_name:'', club_id:'', description:'', is_active:true }
+const E:Partial<Route>={ route_name:'', club_id:'', description:'', is_active:true, vendor_id:null }
 export function Routes() {
-  const { adminUser, isSuperAdmin, clubOpts, loadDeliveryCaches, clubName } = useAdminStore()
+  const { adminUser, isSuperAdmin, isVendor, vendor_id, clubOpts, loadDeliveryCaches, clubName } = useAdminStore()
   const [filterClub, setFilterClub] = useState<string>(isSuperAdmin ? '' : (adminUser?.club_id ?? ''))
   const [rows,setRows]=useState<Route[]>([]); const [loading,setLoading]=useState(true)
   const [form,setForm]=useState<Partial<Route>>(E); const [editing,setEditing]=useState(false)
@@ -27,7 +27,8 @@ export function Routes() {
     setLoading(true); 
     await loadDeliveryCaches(); 
     let q=supabase.from('routes').select('*').order('route_name'); 
-    if(!isSuperAdmin&&adminUser?.club_id) q=q.eq('club_id',adminUser.club_id); 
+    if(isVendor&&vendor_id) q=q.eq('vendor_id',vendor_id);
+    else if(!isSuperAdmin&&adminUser?.club_id) q=q.eq('club_id',adminUser.club_id); 
     else if(isSuperAdmin&&filterClub) q=q.eq('club_id',filterClub);
     const{data}=await q; 
     setRows(data||[]); 
@@ -38,7 +39,7 @@ export function Routes() {
   const save=async()=>{
     if(!form.route_name || !form.club_id){ setErr('Name and Club required'); return }
     setMsg('Saving…'); setErr('')
-    const p={ route_name:form.route_name!, description:form.description||'', is_active:form.is_active??true, club_id:form.club_id! }
+    const p={ route_name:form.route_name!, description:form.description||'', is_active:form.is_active??true, club_id:form.club_id!, vendor_id: isVendor ? vendor_id : form.vendor_id }
     const{error}=editing&&form.route_id ? await supabase.from('routes').update(p).eq('route_id',form.route_id) : await supabase.from('routes').insert(p)
     if(error){ setErr(error.message); setMsg(''); return }
     await loadDeliveryCaches(); setOpen(false); load()
@@ -46,7 +47,7 @@ export function Routes() {
   const doDelete=async()=>{ if(!del) return; await supabase.from('routes').delete().eq('route_id',del.route_id); setDel(null); await loadDeliveryCaches(); load() }
 
   const openAdd = () => {
-    setForm({ ...E, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '' })
+    setForm({ ...E, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '', vendor_id: vendor_id || null })
     setEditing(false); setOpen(true); setErr(''); setMsg('')
   }
   const openEdit = (r: Route) => {

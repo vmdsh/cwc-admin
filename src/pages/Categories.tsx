@@ -8,8 +8,10 @@ import type { ProductCategory, ProductCategoryImage } from '../types/database'
 
 const EMPTY: Partial<ProductCategory> = {
   category_name: '', slug: '', icon_emoji: '', one_word: '',
-  tagline: '', description: '', sort_order: 0, club_id: '', parent_id: ''
+  tagline: '', description: '', sort_order: 0, club_id: '', parent_id: '',
+  need_name: ''
 }
+
 const EMPTY_IMG: Partial<ProductCategoryImage> = {
   category_id: '', image_url: '', title: '', subtitle: '', sort_order: 0
 }
@@ -25,6 +27,8 @@ export function Categories() {
 
   // ── Club filter (superadmin only) ──
   const [filterClub, setFilterClub] = useState<string>(defaultClub)
+  const [filterSlug, setFilterSlug] = useState<string>('')
+  const [filterNeed, setFilterNeed] = useState<string>('')
 
   // ── Category list ──
   const [rows, setRows]       = useState<ProductCategory[]>([])
@@ -99,7 +103,7 @@ export function Categories() {
   // ── Open Add ──
   const openAdd = () => {
     const clubId = isSuperAdmin ? (filterClub || '') : adminUser?.club_id || ''
-    setForm({ ...EMPTY, club_id: clubId })
+    setForm({ ...EMPTY, club_id: clubId, slug: filterSlug, need_name: filterNeed })
     setEditing(false)
     setActiveTab('details')
     setOpen(true)
@@ -133,6 +137,7 @@ export function Categories() {
       club_id:       form.club_id!,
       parent_id:     form.parent_id || null,
       is_predefined: false,
+      need_name:     form.need_name || null,
     }
     const { error } = editing && form.category_id
       ? await supabase.from('product_categories').update(p).eq('category_id', form.category_id)
@@ -142,6 +147,7 @@ export function Categories() {
     setOpen(false)
     load()
   }
+
 
   // ── Delete category ──
   const doDeleteCat = async () => {
@@ -217,31 +223,129 @@ export function Categories() {
     transition: 'color .15s',
   })
 
+  // ── Filtered rows ──
+  const filteredRows = rows.filter(r => {
+    if (filterSlug && r.slug !== filterSlug) return false
+    if (filterNeed && r.need_name !== filterNeed) return false
+    return true
+  })
+
+  // ── Dynamic Need Classification options ──
+  const defaultNeeds = ['Essentials', 'Cosmetics', 'Leisure', 'Office', 'Consult']
+  const existingNeeds = rows.map(r => r.need_name?.trim()).filter(Boolean) as string[]
+  const needOptionsMap = new Map<string, string>()
+  defaultNeeds.forEach(n => needOptionsMap.set(n.toLowerCase(), n))
+  existingNeeds.forEach(n => {
+    if (!needOptionsMap.has(n.toLowerCase())) {
+      needOptionsMap.set(n.toLowerCase(), n)
+    }
+  })
+  const needOptions = Array.from(needOptionsMap.values()).sort()
+
+  // ── Dynamic Slug options ──
+  const defaultSlugs = ['Classifieds', 'Items', 'Concierage', 'Consult']
+  const existingSlugs = rows.map(r => r.slug?.trim()).filter(Boolean) as string[]
+  const slugOptionsMap = new Map<string, string>()
+  defaultSlugs.forEach(s => slugOptionsMap.set(s.toLowerCase(), s))
+  existingSlugs.forEach(s => {
+    if (!slugOptionsMap.has(s.toLowerCase())) {
+      slugOptionsMap.set(s.toLowerCase(), s)
+    }
+  })
+  const slugOptions = Array.from(slugOptionsMap.values()).sort()
+
   return (
     <div>
       {/* ── Header ── */}
       <div className="section-header">
         <div>
           <div className="section-title">Product Categories</div>
-          <div className="section-sub">{rows.length} categories</div>
+          <div className="section-sub">
+            {filteredRows.length === rows.length
+              ? `${rows.length} categories`
+              : `${filteredRows.length} filtered (${rows.length} total)`
+            }
+          </div>
         </div>
         <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Category</button>
       </div>
 
-      {/* ── Club Filter (superadmin only) ── */}
-      {isSuperAdmin && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-          <span style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)' }}>Club</span>
+      {/* ── Filters ── */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '1.25rem', 
+        marginBottom: '1.25rem', 
+        padding: '0.75rem 1rem', 
+        background: 'var(--bg2)', 
+        border: '1px solid var(--border)',
+        borderRadius: '6px',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--accent)', marginRight: 'auto' }}>
+          🔍 Filters
+        </div>
+
+        {/* Club filter (superadmin only) */}
+        {isSuperAdmin && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--text3)' }}>Club:</span>
+            <select
+              value={filterClub}
+              onChange={e => setFilterClub(e.target.value)}
+              style={{ background: 'var(--bg1)', border: '1px solid var(--border)', color: 'var(--text)', padding: '.35rem .75rem', fontSize: '.82rem', borderRadius: '4px', outline: 'none' }}
+            >
+              <option value="">— All Clubs —</option>
+              {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* Need filter combo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--text3)' }}>Need:</span>
           <select
-            value={filterClub}
-            onChange={e => setFilterClub(e.target.value)}
-            style={{ background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text)', padding: '.35rem .75rem', fontSize: '.85rem', minWidth: 220 }}
+            value={filterNeed}
+            onChange={e => setFilterNeed(e.target.value)}
+            style={{ background: 'var(--bg1)', border: '1px solid var(--border)', color: 'var(--text)', padding: '.35rem .75rem', fontSize: '.82rem', borderRadius: '4px', outline: 'none', minWidth: '140px' }}
           >
-            <option value="">— All Clubs —</option>
-            {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <option value="">— All Needs —</option>
+            {needOptions.map(need => (
+              <option key={need} value={need}>{need}</option>
+            ))}
           </select>
         </div>
-      )}
+
+        {/* Slug filter combo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--text3)' }}>Slug:</span>
+          <select
+            value={filterSlug}
+            onChange={e => setFilterSlug(e.target.value)}
+            style={{ background: 'var(--bg1)', border: '1px solid var(--border)', color: 'var(--text)', padding: '.35rem .75rem', fontSize: '.82rem', borderRadius: '4px', outline: 'none', minWidth: '140px' }}
+          >
+            <option value="">— All Slugs —</option>
+            {slugOptions.map(slug => (
+              <option key={slug} value={slug}>{slug}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Clear Filters */}
+        {(filterSlug || filterNeed || (isSuperAdmin && filterClub !== '')) && (
+          <button 
+            onClick={() => {
+              setFilterSlug('')
+              setFilterNeed('')
+              if (isSuperAdmin) setFilterClub('')
+            }}
+            className="btn btn-ghost btn-sm"
+            style={{ padding: '.25rem .5rem', fontSize: '.72rem' }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       {/* ── Form Panel ── */}
       {open && (
@@ -309,9 +413,9 @@ export function Categories() {
                     placeholder="e.g. Items" 
                   />
                   <datalist id="slug-options">
-                    <option value="Classifieds" />
-                    <option value="Items" />
-                    <option value="Concierage" />
+                    {slugOptions.map(opt => (
+                      <option key={opt} value={opt} />
+                    ))}
                   </datalist>
                 </div>
                 <div className="form-group">
@@ -326,10 +430,25 @@ export function Categories() {
                   <input value={form.one_word || ''} onChange={e => setForm(f => ({ ...f, one_word: e.target.value }))} placeholder="Connect" />
                 </div>
                 <div className="form-group">
+                  <label>Need Classification</label>
+                  <input
+                    list="need-options"
+                    value={form.need_name || ''}
+                    onChange={e => setForm(f => ({ ...f, need_name: e.target.value }))}
+                    placeholder="e.g. Essentials"
+                  />
+                  <datalist id="need-options">
+                    {needOptions.map(opt => (
+                      <option key={opt} value={opt} />
+                    ))}
+                  </datalist>
+                </div>
+                <div className="form-group">
                   <label>Sort Order</label>
                   <input type="number" value={form.sort_order ?? 0} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} />
                 </div>
               </div>
+
               <div className="form-group">
                 <label>Tagline</label>
                 <input value={form.tagline || ''} onChange={e => setForm(f => ({ ...f, tagline: e.target.value }))} placeholder="Short tagline" />
@@ -434,6 +553,7 @@ export function Categories() {
                   <th>Icon</th>
                   <th>Name</th>
                   <th>Parent</th>
+                  <th>Need</th>
                   <th>Slug</th>
                   <th>Club</th>
                   <th>Sort</th>
@@ -441,14 +561,15 @@ export function Categories() {
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0
-                  ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>No categories yet.</td></tr>
-                  : rows.map(r => (
+                {filteredRows.length === 0
+                  ? <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>No categories match the filters.</td></tr>
+                  : filteredRows.map(r => (
                     <tr key={r.category_id}>
                       <td style={{ fontSize: '1.2rem' }}>{r.icon_emoji || '—'}</td>
                       <td style={{ fontWeight: 500, color: 'var(--text)' }}>{r.category_name}</td>
                       <td style={{ fontSize: '.78rem', color: 'var(--text3)' }}>{parentLabel(r.parent_id)}</td>
-                      <td><code style={{ fontSize: '.72rem', color: 'var(--accent)' }}>{r.slug || '—'}</code></td>
+                      <td style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--accent)' }}>{r.need_name || '—'}</td>
+                      <td><code style={{ fontSize: '.72rem', color: 'var(--text2)' }}>{r.slug || '—'}</code></td>
                       <td>{clubName(r.club_id)}</td>
                       <td>{r.sort_order || 0}</td>
                       <td className="td-actions">

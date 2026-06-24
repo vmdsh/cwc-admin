@@ -34,7 +34,9 @@ export interface ProductCategory {
   description?: string; sort_order?: number; club_id: string
   parent_id?: string | null
   is_predefined?: boolean; created_at?: string
+  need_name?: string | null
 }
+
 export interface ProductCategoryImage {
   image_id: string; category_id: string; image_url: string
   title?: string; subtitle?: string; sort_order?: number; is_active?: boolean
@@ -43,6 +45,7 @@ export interface Product {
   product_id: string; product_name: string; description?: string
   price: number; uom?: string; service_type?: 'E' | 'B' | 'S' | 'I'
   category_id: string; club_id: string; created_at?: string
+  vendor_id?: string | null
 }
 export interface ProductImage {
   image_id: string; product_id: string; image_url: string
@@ -63,6 +66,7 @@ export interface Shop {
   lon?:         number | null
   lng?:         number | null
   coords?:       string | null
+  vendor_id?: string | null
 }
 export interface ShopImage {
   image_id: string; shop_id: string; image_url: string
@@ -82,6 +86,7 @@ export interface User {
   role?: 'superadmin' | 'clubadmin' | 'member' | 'errand' | 'vendadmin' | 'custadmin'; club_id?: string; created_at?: string
   speak_lang?: string; keyboard_lang?: string
   phone?: string; user_whatsapp?: string
+  vendor_id?: string | null
 }
 export interface UserAddress {
   address_id: string; user_id?: string; label?: string; address: string
@@ -97,6 +102,7 @@ export interface UserProfile {
 export interface Route {
   route_id: string; route_name: string; club_id?: string
   description?: string; is_active?: boolean; created_at?: string
+  vendor_id?: string | null
 }
 export interface RouteWaypoint {
   way_id: string; route_id: string; way_name: string
@@ -107,6 +113,7 @@ export interface RouteMovement {
   movement_date: string; start_time?: string; end_time?: string
   status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
   notes?: string; created_at?: string
+  vendor_id?: string | null
 }
 export interface MovementProduct {
   id: string; movement_id: string; product_id: string

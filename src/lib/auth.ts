@@ -20,7 +20,7 @@ export async function loginAdmin(email: string, password: string): Promise<Admin
   if (user.password !== password) throw new Error('Invalid email or password')
 
   // Step 3: Check admin role
-  if (!['superadmin', 'clubadmin'].includes(user.role))
+  if (!['superadmin', 'clubadmin', 'vendadmin', 'vendor'].includes(user.role))
     throw new Error('Access denied — admin role required')
 
   // Step 4: Persist session (exclude password from stored object)
@@ -39,7 +39,7 @@ export function restoreAdminSession(): AdminUser | null {
     const saved = localStorage.getItem(KEY)
     if (!saved) return null
     const user = JSON.parse(saved) as AdminUser
-    if (!['superadmin', 'clubadmin'].includes(user.role)) return null
+    if (!['superadmin', 'clubadmin', 'vendadmin', 'vendor'].includes(user.role)) return null
     return user
   } catch {
     localStorage.removeItem(KEY)

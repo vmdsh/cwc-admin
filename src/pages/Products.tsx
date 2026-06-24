@@ -10,7 +10,7 @@ import type { Product, ProductImage } from '../types/database'
 
 const EMPTY: Partial<Product> = {
   product_name: '', description: '', price: 0, uom: '',
-  service_type: 'E', category_id: '', club_id: ''
+  service_type: 'E', category_id: '', club_id: '', vendor_id: null
 }
 const EMPTY_IMG: Partial<ProductImage> = {
   product_id: '', image_url: '', caption: '', sort_order: 0
@@ -26,7 +26,7 @@ const SVC_TYPES: { value: string; label: string }[] = [
 ]
 
 export function Products() {
-  const { adminUser, isSuperAdmin, clubs, categories, clubOpts, catOpts, loadCaches, clubName, catName } = useAdminStore()
+  const { adminUser, isSuperAdmin, isVendor, vendor_id, clubs, categories, clubOpts, catOpts, loadCaches, clubName, catName } = useAdminStore()
 
   // ── Filters ──
   const [filterClub, setFilterClub] = useState<string>(isSuperAdmin ? '' : (adminUser?.club_id ?? ''))
@@ -63,7 +63,8 @@ export function Products() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('products').select('*')
-    if (!isSuperAdmin && adminUser?.club_id) q = q.eq('club_id', adminUser.club_id)
+    if (isVendor && vendor_id) q = q.eq('vendor_id', vendor_id)
+    else if (!isSuperAdmin && adminUser?.club_id) q = q.eq('club_id', adminUser.club_id)
     else if (isSuperAdmin && filterClub) q = q.eq('club_id', filterClub)
     if (filterCat) q = q.eq('category_id', filterCat)
     if (filterSvc) q = q.eq('service_type', filterSvc)
@@ -92,7 +93,7 @@ export function Products() {
   }
 
   const openAdd = () => {
-    setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '' })
+    setForm({ ...EMPTY, club_id: isSuperAdmin ? (filterClub || '') : adminUser?.club_id || '', vendor_id: vendor_id || null })
     setEditing(false); setActiveTab('details')
     setOpen(true); setErr(''); setMsg('')
   }
@@ -113,6 +114,7 @@ export function Products() {
       price: form.price || 0, uom: form.uom || '',
       service_type: form.service_type || 'E',
       category_id: form.category_id!, club_id: form.club_id!,
+      vendor_id: isVendor ? vendor_id : form.vendor_id,
     }
     const { error, data } = editing && form.product_id
       ? await supabase.from('products').update(p).eq('product_id', form.product_id).select().single()

@@ -7,6 +7,7 @@ interface Opt { value: string; label: string }
 
 interface AdminStore {
   adminUser: AdminUser | null; isSuperAdmin: boolean
+  isVendor: boolean; vendor_id: string | null; vendor_club_id: string | null
   setAdminUser: (u: AdminUser | null) => void
   theme: Theme; setTheme: (t: Theme) => void
   clubs: Club[]; categories: ProductCategory[]; products: Product[]
@@ -35,7 +36,17 @@ const s = (id?: string | null) => id ? id.slice(0, 8) + '…' : '—'
 
 export const useAdminStore = create<AdminStore>((set, get) => ({
   adminUser: null, isSuperAdmin: false,
-  setAdminUser: (u) => set({ adminUser: u, isSuperAdmin: u?.role === 'superadmin' }),
+  isVendor: false, vendor_id: null, vendor_club_id: null,
+  setAdminUser: (u) => {
+    const isVendorRole = u?.role === 'vendor' || u?.role === 'vendadmin';
+    set({ 
+      adminUser: u, 
+      isSuperAdmin: u?.role === 'superadmin',
+      isVendor: isVendorRole,
+      vendor_id: isVendorRole ? u?.user_id : null,
+      vendor_club_id: isVendorRole ? u?.club_id : null
+    })
+  },
 
   theme: (localStorage.getItem('cwc_theme') as Theme) || 'dark',
   setTheme: (t) => { 
@@ -56,12 +67,14 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
       const { data: usrs }  = await supabase.from('users').select('*')
 
       const c_id = adminUser?.club_id
+      const v_id = get().vendor_id
+
       set({
         clubs: clubs || [],
         categories: (cats || []).filter((c: any) => isSuperAdmin || (c_id && c.club_id === c_id)),
-        products:   (prods || []).filter((p: any) => isSuperAdmin || (c_id && p.club_id === c_id)),
-        shops:      (shps || []).filter((sh: any) => isSuperAdmin || (c_id && sh.club_id === c_id)),
-        users: usrs || [],
+        products:   (prods || []).filter((p: any) => isSuperAdmin || (v_id ? p.vendor_id === v_id : (c_id && p.club_id === c_id))),
+        shops:      (shps || []).filter((sh: any) => isSuperAdmin || (v_id ? sh.vendor_id === v_id : (c_id && sh.club_id === c_id))),
+        users:      (usrs || []).filter((u: any) => isSuperAdmin || (v_id ? u.vendor_id === v_id : true)),
       })
     } catch(e) { console.warn('Cache load error:', e) }
   },
@@ -79,9 +92,10 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
        */
 
       const c_id = adminUser?.club_id
+      const v_id = get().vendor_id
       set({
-        routes: (rt || []).filter((r: any) => isSuperAdmin || (c_id && r.club_id === c_id)),
-        movements: mv || [],
+        routes: (rt || []).filter((r: any) => isSuperAdmin || (v_id ? r.vendor_id === v_id : (c_id && r.club_id === c_id))),
+        movements: (mv || []).filter((m: any) => isSuperAdmin || (v_id ? m.vendor_id === v_id : true)),
       })
     } catch(e) { console.warn('Delivery error:', e) }
   },
@@ -104,8 +118,12 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
 
   clubOpts:  () => get().clubs.map(c=>({ value:c.club_id, label:`${c.flag_emoji||''} ${c.club_name}`.trim() })),
   catOpts:   (_='', clubId='') => {
-    const list = clubId ? get().categories.filter(c=>c.club_id===clubId) : get().categories
-    return list.map(c=>({ value:c.category_id, label:c.category_name }))
+    const { isVendor } = get();
+    let list = clubId ? get().categories.filter(c=>c.club_id===clubId) : get().categories;
+    if (isVendor) {
+      list = list.filter(c => c.is_predefined === false && c.slug !== 'classifieds');
+    }
+    return list.map(c=>({ value:c.category_id, label:c.category_name }));
   },
   prodOpts:  () => get().products.map(p=>({ value:p.product_id, label:p.product_name })),
   shopOpts:  () => get().shops.map(sh=>({ value:sh.shop_id, label:sh.shop_name })),

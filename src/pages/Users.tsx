@@ -4,7 +4,7 @@ import { useAdminStore } from '../lib/store'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Select } from '../components/Select'
 import type { User } from '../types/database'
-const E:Partial<User>={ name:'', email:'', password:'', role:'member', club_id:'', speak_lang:'ml-IN', keyboard_lang:'en_GB', phone:'', user_whatsapp:'' }
+const E:Partial<User>={ name:'', email:'', password:'', role:'member', club_id:'', speak_lang:'ml-IN', keyboard_lang:'en_GB', phone:'', user_whatsapp:'', vendor_id:null }
 const LANGS = [
   { v: 'en_GB', l: 'English (UK)' },
   { v: 'de-LU', l: 'German (LU)' },
@@ -47,7 +47,7 @@ function parsePhone(val?: string | null) {
   return { ext: '+91', num: trimmed }
 }
 export function Users() {
-  const { adminUser, isSuperAdmin, clubOpts, loadCaches, clubName, clubSlug } = useAdminStore()
+  const { adminUser, isSuperAdmin, isVendor, vendor_id, clubOpts, loadCaches, clubName, clubSlug } = useAdminStore()
   
   // Club filter
   const clubOptions = clubOpts()
@@ -68,8 +68,12 @@ export function Users() {
     setLoading(true); 
     let q=supabase.from('users').select('*'); 
     
+    // For vendors, filter by vendor_id
+    if (isVendor && vendor_id) {
+      q = q.eq('vendor_id', vendor_id)
+    }
     // For non-superadmins, always filter by their club
-    if(!isSuperAdmin && adminUser?.club_id) {
+    else if(!isSuperAdmin && adminUser?.club_id) {
       q = q.eq('club_id', adminUser.club_id)
     } 
     // For superadmins, filter by selected club if any
@@ -96,7 +100,8 @@ export function Users() {
       speak_lang: form.speak_lang || 'ml-IN',
       keyboard_lang: form.keyboard_lang || 'en_GB',
       phone: phoneNum ? `${phoneExt} ${phoneNum.trim()}` : '',
-      user_whatsapp: waNum ? `${waExt} ${waNum.trim()}` : ''
+      user_whatsapp: waNum ? `${waExt} ${waNum.trim()}` : '',
+      vendor_id: isVendor ? vendor_id : form.vendor_id
     }
     const{error}=editing&&form.user_id ? await supabase.from('users').update(p).eq('user_id',form.user_id) : await supabase.from('users').insert(p)
     if(error){ setErr(error.message); setMsg(''); return }
@@ -119,7 +124,7 @@ export function Users() {
     <div>
       <div className="section-header">
         <div><div className="section-title">Users</div><div className="section-sub">{filteredRows.length} users</div></div>
-        {isSuperAdmin&&<button className="btn btn-primary btn-sm" onClick={()=>{ setForm(E); setPhoneExt('+91'); setPhoneNum(''); setWaExt('+91'); setWaNum(''); setEditing(false); setOpen(true); setErr(''); setMsg('') }}>+ Add User</button>}
+        {(isSuperAdmin || isVendor)&&<button className="btn btn-primary btn-sm" onClick={()=>{ setForm({...E, club_id: adminUser?.club_id || '', vendor_id: vendor_id || null}); setPhoneExt('+91'); setPhoneNum(''); setWaExt('+91'); setWaNum(''); setEditing(false); setOpen(true); setErr(''); setMsg('') }}>+ Add User</button>}
        </div>
       
        <div className="filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>

@@ -70,10 +70,15 @@ export function Layout() {
       </div>
       <div className="admin-wrap">
         <div className="admin-sidebar">
-          {NAV.map(group=>(
+          {NAV.map(group=>{
+            const isVendor = adminUser?.role === 'vendor' || adminUser?.role === 'vendadmin';
+            const allowedForVendor = ['Categories', 'Category Images', 'Products', 'Shops', 'Shop Products', 'Routes', 'Waypoints', 'Movements', 'Users', 'User Addresses'];
+            const filteredItems = group.items.filter(item => isVendor ? allowedForVendor.includes(item.label) : true);
+            if (filteredItems.length === 0) return null;
+            return (
             <div key={group.section}>
               <div className="sidebar-section">{group.section}</div>
-              {group.items.map(item=>(
+              {filteredItems.map(item=>(
                 <button key={item.path}
                   className={`sidebar-item${location.pathname===item.path?' active':''}`}
                   onClick={()=>navigate(item.path)}>
@@ -81,7 +86,7 @@ export function Layout() {
                 </button>
               ))}
             </div>
-          ))}
+          )})}
         </div>
         <div className="admin-main"><Outlet/></div>
       </div>
